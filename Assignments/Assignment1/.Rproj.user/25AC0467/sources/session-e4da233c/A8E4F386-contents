@@ -1,0 +1,75 @@
+---
+title: "Assignment 1"
+author: "Nicholas Jacob"
+date: "2024-08-19"
+output: pdf_document
+---
+
+```{r setup}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Using R:  Vectors
+
+
+Using `c` to combine the values, we see that $x$ is a vector.
+```{r 1a}
+x<- c(3,12,6,-5,0,8,15,1,-10,7)
+is.vector(x)
+```
+To create the new vector $y$ as a sequence from the min of $x$ to the max of $x$, we do the following:
+```{r 1b}
+y <-seq(min(x),max(x), length.out = 10)
+y
+```
+I was not familiar with the `length.out` command but found it in the Help package to see that it would restrict the output to that many elements.
+
+We compute the desired stats next
+
+```{r 1c}
+#consider changing this one with some tidy code
+sum(x)
+sum(y)
+mean(x)
+mean(y)
+sd(x)
+sd(y)
+var(x)
+var(y)
+mad(x)
+mad(y)
+quantile(x,1/4)
+quantile(y,1/4)
+quantile(x,3/4)
+quantile(y,3/4)
+quantile(x,1/5)
+quantile(y,1/5)
+quantile(x,3/5)
+quantile(y,3/5)
+quantile(x,2/5)
+quantile(y,2/5)
+quantile(x,4/5)
+quantile(y,4/5)
+```
+To do sampling with replacement we do the following
+
+```{r 1d}
+sample(x,7,TRUE)
+```
+The `TRUE` gives the replacement.  Some instances do see repeated vales.
+
+Next we do the `t.test`
+```{r}
+t.test(x,y)
+```
+We fail to reject the null hypothesis here.  There is no evidence to suggest that the mean values are different.
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
