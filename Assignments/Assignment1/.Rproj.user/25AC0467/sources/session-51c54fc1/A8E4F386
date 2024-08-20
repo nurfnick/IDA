@@ -3,7 +3,7 @@
     "path": "~/GitHub/IDA/Assignments/Assignment1/Assignment1.Rmd",
     "project_path": "Assignment1.Rmd",
     "type": "r_markdown",
-    "hash": "3541745627",
+    "hash": "936566855",
     "contents": "",
     "dirty": false,
     "created": 1724097226068.0,
@@ -13,16 +13,16 @@
         "tempName": "Untitled1",
         "source_window_id": "",
         "Source": "Source",
-        "cursorPosition": "64,112",
-        "scrollLine": "64",
-        "last_setup_crc32": "e4da233cbb338d19"
+        "cursorPosition": "170,19",
+        "scrollLine": "162",
+        "last_setup_crc32": "51c54fc1bb338d19"
     },
     "folds": "",
-    "lastKnownWriteTime": 1724101022,
+    "lastKnownWriteTime": 1724171242,
     "encoding": "UTF-8",
     "collab_server": "",
     "source_window": "",
-    "last_content_update": 1724101022793,
+    "last_content_update": 1724171244385,
     "read_only": false,
     "read_only_alternatives": []
 }

@@ -1,0 +1,2 @@
+"0","college = read.csv('college.csv')"
+"0","head(college)"
