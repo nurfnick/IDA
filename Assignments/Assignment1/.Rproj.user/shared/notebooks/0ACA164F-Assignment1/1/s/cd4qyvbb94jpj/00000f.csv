@@ -1,0 +1,2 @@
+"0","colnames(quakeAvgDepth) = c('mag','meanDepth')"
+"0","head(quakeAvgDepth)"

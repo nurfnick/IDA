@@ -1,0 +1,1 @@
+"0","plot(quakes$depth,quakes$mag, xlab = 'Depth', ylab = 'Magnitude', main = 'Scatter Plot of Depth vs Magnitude')"

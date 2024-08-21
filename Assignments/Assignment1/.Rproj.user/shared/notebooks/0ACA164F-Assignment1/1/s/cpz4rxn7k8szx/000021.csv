@@ -1,0 +1,1 @@
+"0","hist(college[,'Enroll'], main = ""10 bins"",breaks = 10, xlab = ""Enrollment"")"

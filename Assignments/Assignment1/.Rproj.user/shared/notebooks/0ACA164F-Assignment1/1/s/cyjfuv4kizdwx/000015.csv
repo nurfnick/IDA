@@ -1,0 +1,1 @@
+"0","boxplot(Outstate ~ Private, data = college, main = ""Out Of State Tuition by College Type"", ylab = ""Out of State Tuition"")"

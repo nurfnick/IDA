@@ -1,0 +1,3 @@
+"0","baseball <- mutate(baseball, obp = (h+bb+hbp)/(ab+bb+hbp+sf))"
+"0",""
+"0","head(baseball)"

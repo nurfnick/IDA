@@ -7,6 +7,7 @@ output: pdf_document
 
 ```{r setup}
 knitr::opts_chunk$set(echo = TRUE)
+library(plyr)
 ```
 
 ## Using R:  Vectors
@@ -170,3 +171,117 @@ I am not familiar with the `pairs` command but here goes
 ```{r}
 pairs(college[,2:10])
 ```
+
+That is a nice graphic although a bit too small for my tastes.  I hope it compiles correctly in the pdf...
+
+Next I'll create the boxplot for out of state tution vs the public or private.
+```{r}
+boxplot(Outstate ~ Private, data = college, main = "Out Of State Tuition by College Type", ylab = "Out of State Tuition")
+```
+This looks fine although I do prefer `ggplot2`.
+
+Next I comment the code as requested
+```{r}
+Elite <- rep ("No", nrow(college )) #This creates a vector that full of No that is the same width as the dataframe
+Elite [college$Top10perc >50] <- "Yes" #this changes some of the nos to yes if the top10 is more than 50%
+Elite <- as.factor (Elite) #this casts the vector as a factor vector.  This is useful in that Elite now has levels
+college <- data.frame(college ,Elite) #this adds the column to the original dataframe and saves it
+
+summary(Elite)
+```
+
+It appears that there are 78 elite universities.  Let's explore tutions with this new factor
+```{r}
+boxplot(Outstate ~ Elite, data = college, main = "Out Of State Tuition by Elite Institutions", ylab = "Out of State Tuition")
+```
+
+Next we look at a few histograms with differing number of bins.
+
+```{r}
+par(mfrow=c(2,2))
+hist(college[,'Enroll'], main = "Default", xlab = "Enrollment")
+hist(college[,'Enroll'], main = "10 bins",breaks = 10, xlab = "Enrollment")
+hist(college[,'Enroll'], main = "20 bins",breaks = 20, xlab = "Enrollment")
+hist(college[,'Enroll'], main = "50 bins",breaks = 50, xlab = "Enrollment")
+```
+
+I don't see much difference between the default, 10 nor 20.  The 50 does look a bit different.
+
+Again just to try it once more
+```{r}
+par(mfrow=c(2,2))
+hist(college[,'Room.Board'], main = "Default", xlab = "Room and Board Cost")
+hist(college[,'Room.Board'], main = "10 bins",breaks = 10, xlab = "Room and Board Cost")
+hist(college[,'Room.Board'], main = "20 bins",breaks = 20, xlab = "Room and Board Cost")
+hist(college[,'Room.Board'], main = "50 bins",breaks = 50, xlab = "Room and Board Cost")
+```
+
+It kind of looks like more than 10 breaks  Maybe the default overrides that option if you set it too low... 
+
+## Using R:  Manipulating Data in Data Frames
+
+First, I'll load some data directly from a package.  This `baseball` data comes from the `plyr` package loaded earlier.
+
+```{r}
+head(baseball)
+```
+Lots of baseball data!
+
+```{r}
+baseball[baseball$year<1954,'sf'] = 0 #set all sf before 1954 to 0
+baseball[is.na(baseball$hbp),'hbp'] = 0 #set all null values for hit by pitch to 0
+baseball <- baseball[baseball$ab>=50,]
+
+
+```
+
+Now that the data is clean, we will apply the obp formula of 
+$$
+obp = \frac{h+bb+hbp}{ab+bb+hpb+sf}
+$$
+
+```{r}
+baseball <- mutate(baseball, obp = (h+bb+hbp)/(ab+bb+hbp+sf))
+
+head(baseball)
+```
+
+Now that we have that info added, let's find the top five players for obp of all time.
+
+```{r}
+arrange(baseball, -obp)[1:5,c('year','id','obp')] #I get the top records with 1:5, restrict on to the columns asked for and sort via arrange and the negative gives the max rather than min
+```
+We see here Barry Bonds (from the 'roids era twice), Ted Williams(a year he hit .400), John McGraw (a player I was not familiar with though he did have a season with my home team Cardinals in 1900) and the babe himself Babe Ruth.
+
+##Using R:  `aggregate()` Function
+
+I am going to grab the `quakes` dataset.
+```{r}
+head(quakes)
+```
+
+Next we will examine magnitude versus depth with a scatter plot.
+
+```{r}
+plot(quakes$depth,quakes$mag, xlab = 'Depth', ylab = 'Magnitude', main = 'Scatter Plot of Depth vs Magnitude')
+```
+Next we will aggregate the data to look at the average depth for each of the magnitude levels
+```{r}
+quakeAvgDepth = aggregate(quakes$depth, list(mag = quakes$mag), mean)
+```
+Not too bad when you follow the example in the help menu.
+
+Next I rename the dataframe to have useful column names and print it to see the nice output.
+
+```{r}
+colnames(quakeAvgDepth) = c('mag','meanDepth')
+head(quakeAvgDepth)
+```
+
+Now we plot again to see if there is a relationship in the aggregate
+
+```{r}
+plot(quakeAvgDepth$mag,quakeAvgDepth$meanDepth, xlab = 'Magnitude', ylab = 'Average Depth',main = 'Scatter of Aggregated Magnitude vs Mean Depth')
+```
+
+There clearly appears to be a relationship here.  It was not as obvious in the full data case but the relationship appears in the aggregate.  I do question a bit of this methodology though.  We are aggregating a continuous variable that has been truncated to two decimals.  Richter scale (magnitude) is a famous example of a logarithmic scale so small rounding errors are amplified in varying degrees as you increase the scale.  While yes, I believe there is a relationship, I'd be worried about generalizing too far based on this data.

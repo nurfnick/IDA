@@ -1,0 +1,1 @@
+"0","arrange(baseball, -obp)[1:5,c('year','id','obp')]"
