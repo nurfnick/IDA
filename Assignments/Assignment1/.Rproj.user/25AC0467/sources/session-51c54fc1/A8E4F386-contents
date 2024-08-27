@@ -10,22 +10,22 @@ knitr::opts_chunk$set(echo = TRUE)
 library(plyr)
 ```
 
-## Using R:  Vectors
+## 1 Using R:  Vectors
 
 
-Using `c` to combine the values, we see that $x$ is a vector.
+a. Using `c` to combine the values, we see that $x$ is a vector.
 ```{r 1a}
 x<- c(3,12,6,-5,0,8,15,1,-10,7)
 is.vector(x)
 ```
-To create the new vector $y$ as a sequence from the min of $x$ to the max of $x$, we do the following:
+b. To create the new vector $y$ as a sequence from the min of $x$ to the max of $x$, we do the following:
 ```{r 1b}
 y <-seq(min(x),max(x), length.out = 10)
 y
 ```
 I was not familiar with the `length.out` command but found it in the Help package to see that it would restrict the output to that many elements.
 
-We compute the desired stats next
+c. We compute the desired stats next
 
 ```{r 1c}
 #consider changing this one with some tidy code
@@ -52,20 +52,21 @@ quantile(y,2/5)
 quantile(x,4/5)
 quantile(y,4/5)
 ```
-To do sampling with replacement we do the following
+d. To do sampling with replacement we do the following
 
 ```{r 1d}
-sample(x,7,TRUE)
+z <- sample(x,7,TRUE)
+z
 ```
 The `TRUE` gives the replacement.  Some instances do see repeated vales.
 
-Next we do the `t.test`
+e. Next we do the `t.test`
 ```{r}
 t.test(x,y)
 ```
 We fail to reject the null hypothesis here.  There is no evidence to suggest that the mean values are different.
 
-Next we explore the `order` function.
+f. Next we explore the `order` function.
 
 ```{r 1g}
 order(x)
@@ -88,7 +89,7 @@ t.test(sort(x),y,paired = TRUE)
 
 The result here is still not significant (for p =0.05) but is much closer than in the non-paired data.  I am actually quite surprised at that result but since $y$ is build off of $x$ and now they are both sequential I could see why they might be statistically equivalent on average.
 
-A logical test for negativity is simply
+g. A logical test for negativity is simply
 ```{r}
 x>0
 ```
@@ -99,7 +100,7 @@ x <- x[x>0]
 x
 ```
 
-## Using R:  Some Missing Values
+## 2 Using R:  Some Missing Values
 
 ```{r}
 col1 <- c(1,2,3,NA,5)
@@ -113,7 +114,7 @@ X
 
 ```
 
-So we see $X$ has NA in three rows.  We can find the NAs with the following
+a. So we see $X$ has NA in three rows.  We can find the NAs with the following
 ```{r}
 is.na(X)
 ```
@@ -122,7 +123,7 @@ To get to which rows have the NAs, we sum across the booleans and ask that the s
 rownames(X)[rowSums(is.na(X))>0]
 ```
 
-For the next piece, we define $y$
+b. For the next piece, we define $y$
 
 ```{r}
 y <- c(3,12,99,99,7,99,21)
@@ -147,22 +148,22 @@ I count the NA values with a sum of the booleans
 sum(is.na(y))
 ```
 
-##Using R:  IDE
+## 3 Using R:  IDE
 
-Here I have read the data in.  I utilize the head command to display the first 6 rows.
+a. Here I have read the data in.  I utilize the head command to display the first 6 rows.
 ```{r}
 college = read.csv('college.csv')
 head(college)
 ```
 
-Next, I change the rownames to the university name and delete that column.
+b. Next, I change the rownames to the university name and delete that column.
 ```{r}
 rownames (college) <- college [,1]
 college <- college [,-1]
 head(college)
 ```
 
-Next we examine some stats on the data
+c. Next we examine some stats on the data
 ```{r}
 summary(college)
 ```
@@ -218,14 +219,14 @@ hist(college[,'Room.Board'], main = "50 bins",breaks = 50, xlab = "Room and Boar
 
 It kind of looks like more than 10 breaks  Maybe the default overrides that option if you set it too low... 
 
-## Using R:  Manipulating Data in Data Frames
+## 4 Using R:  Manipulating Data in Data Frames
 
-First, I'll load some data directly from a package.  This `baseball` data comes from the `plyr` package loaded earlier.
+a. First, I'll load some data directly from a package.  This `baseball` data comes from the `plyr` package loaded earlier.
 
 ```{r}
 head(baseball)
 ```
-Lots of baseball data!
+b. Lots of baseball data!
 
 ```{r}
 baseball[baseball$year<1954,'sf'] = 0 #set all sf before 1954 to 0
@@ -235,7 +236,7 @@ baseball <- baseball[baseball$ab>=50,]
 
 ```
 
-Now that the data is clean, we will apply the obp formula of 
+c. Now that the data is clean, we will apply the obp formula of 
 $$
 obp = \frac{h+bb+hbp}{ab+bb+hpb+sf}
 $$
@@ -246,42 +247,42 @@ baseball <- mutate(baseball, obp = (h+bb+hbp)/(ab+bb+hbp+sf))
 head(baseball)
 ```
 
-Now that we have that info added, let's find the top five players for obp of all time.
+d. Now that we have that info added, let's find the top five players for obp of all time.
 
 ```{r}
 arrange(baseball, -obp)[1:5,c('year','id','obp')] #I get the top records with 1:5, restrict on to the columns asked for and sort via arrange and the negative gives the max rather than min
 ```
 We see here Barry Bonds (from the 'roids era twice), Ted Williams(a year he hit .400), John McGraw (a player I was not familiar with though he did have a season with my home team Cardinals in 1900) and the babe himself Babe Ruth.
 
-##Using R:  `aggregate()` Function
+## 5 Using R:  `aggregate()` Function
 
-I am going to grab the `quakes` dataset.
+a. I am going to grab the `quakes` dataset.
 ```{r}
 head(quakes)
 ```
 
-Next we will examine magnitude versus depth with a scatter plot.
+b. Next we will examine magnitude versus depth with a scatter plot.
 
 ```{r}
 plot(quakes$depth,quakes$mag, xlab = 'Depth', ylab = 'Magnitude', main = 'Scatter Plot of Depth vs Magnitude')
 ```
-Next we will aggregate the data to look at the average depth for each of the magnitude levels
+c. Next we will aggregate the data to look at the average depth for each of the magnitude levels
 ```{r}
 quakeAvgDepth = aggregate(quakes$depth, list(mag = quakes$mag), mean)
 ```
 Not too bad when you follow the example in the help menu.
 
-Next I rename the dataframe to have useful column names and print it to see the nice output.
+d. Next I rename the dataframe to have useful column names and print it to see the nice output.
 
 ```{r}
 colnames(quakeAvgDepth) = c('mag','meanDepth')
 head(quakeAvgDepth)
 ```
 
-Now we plot again to see if there is a relationship in the aggregate
+e. Now we plot again to see if there is a relationship in the aggregate
 
 ```{r}
 plot(quakeAvgDepth$mag,quakeAvgDepth$meanDepth, xlab = 'Magnitude', ylab = 'Average Depth',main = 'Scatter of Aggregated Magnitude vs Mean Depth')
 ```
 
-There clearly appears to be a relationship here.  It was not as obvious in the full data case but the relationship appears in the aggregate.  I do question a bit of this methodology though.  We are aggregating a continuous variable that has been truncated to two decimals.  Richter scale (magnitude) is a famous example of a logarithmic scale so small rounding errors are amplified in varying degrees as you increase the scale.  While yes, I believe there is a relationship, I'd be worried about generalizing too far based on this data.
+f. There clearly appears to be a relationship here.  It was not as obvious in the full data case but the relationship appears in the aggregate.  I do question a bit of this methodology though.  We are aggregating a continuous variable that has been truncated to two decimals.  Richter scale (magnitude) is a famous example of a logarithmic scale so small rounding errors are amplified in varying degrees as you increase the scale.  While yes, I believe there is a relationship, I'd be worried about generalizing too far based on this data.
