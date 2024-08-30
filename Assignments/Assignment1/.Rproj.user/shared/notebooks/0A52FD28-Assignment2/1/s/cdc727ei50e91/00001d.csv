@@ -1,0 +1,3 @@
+"0","ggplot(data = house, aes(x = SalePrice, color = CentralAir))+"
+"0","  geom_histogram(fill = ""white"") +"
+"0","  facet_wrap(~Neighborhood )"

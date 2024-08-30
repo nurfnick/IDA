@@ -1,0 +1,8 @@
+"0","ggplot(data = mpg, aes(x = displ, y = hwy ))+"
+"0","  geom_jitter(alpha = 0.5) + "
+"0","  facet_wrap(~drv) +"
+"0","  geom_smooth(method = ""lm"", se = FALSE, color = 'black' ) +"
+"0","  geom_smooth(method = ""loess"") + "
+"0","  ylab(""Highway MPG"") +"
+"0","  xlab(""Displacement"") +"
+"0","  ggtitle(""Recreating the Master Hadley Wickham"")"
