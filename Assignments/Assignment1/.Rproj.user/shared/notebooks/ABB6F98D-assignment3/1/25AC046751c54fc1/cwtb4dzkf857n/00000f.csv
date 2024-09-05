@@ -1,0 +1,2 @@
+"0","Glass <- read.csv('glass.data')"
+"0","head(Glass)"

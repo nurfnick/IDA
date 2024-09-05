@@ -7,6 +7,9 @@ output: pdf_document
 
 ```{r setup, include=TRUE}
 library(tidyverse)
+library(GGally)
+library(ggridges)
+library(naniar)
 ```
 
 ## 1 Learning `ggplot1`
@@ -41,7 +44,8 @@ a. \S 3.3.1 \#3 Map a continuous variable to color, size, and shape. How do thes
 
 ```{r}
 ggplot(data = mpg) + 
-  geom_point(mapping = aes(x = displ, y = hwy, color = cty, size = displ))
+  geom_point(mapping = aes(x = displ, y = hwy, color = cty, size = displ))+ 
+  ggtitle("Color and Displacement added to Scatter")
 ```
 
 Color gave a gradient and size made some differentiation of the size in the point.  `shape` through an error so I removed it so that I could have a picture.  The error specifically says that shape cannot be a continuous variable.
@@ -49,7 +53,8 @@ Color gave a gradient and size made some differentiation of the size in the poin
 a. \S 3.3.1 \#4 What happens if you map the same variable to multiple aesthetics?
 ```{r}
 ggplot(data = mpg) + 
-  geom_point(mapping = aes(x = displ, y = hwy, size = displ))
+  geom_point(mapping = aes(x = displ, y = hwy, size = displ))+
+  ggtitle("Adding size as one of variables")
 ```
 
 Nothing, it makes the graphic that you asked for...
@@ -58,7 +63,8 @@ a. \S 3.3.1 \#6 What happens if you map an aesthetic to something other than a v
 
 ```{r}
 ggplot(data = mpg) + 
-  geom_point(mapping = aes(x = displ, y = hwy, size = displ<5))
+  geom_point(mapping = aes(x = displ, y = hwy, size = displ<5))+
+  ggtitle("Including a Boolean")
 ```
 
 It converted that variable from the dataset into a boolean and then graphed it.
@@ -67,14 +73,16 @@ a. \S 3.5.1 \#4 Take the first faceted plot in this section:
 ```{r}
 ggplot(data = mpg) + 
   geom_point(mapping = aes(x = displ, y = hwy)) + 
-  facet_wrap(~ class, nrow = 2)
+  facet_wrap(~ class, nrow = 2)+
+  ggtitle("Facet Wrap of Car Type with Milage and Displacement")
 ```
 What are the advantages to using faceting instead of the colour aesthetic? What are the disadvantages? How might the balance change if you had a larger dataset?
 
 Facet is going to give each `class` by itself.  You can quickly see each class and recognize where it congregates in the data.  If we had done this with the color aesthetic as below,
 ```{r}
 ggplot(data = mpg) + 
-  geom_point(mapping = aes(x = displ, y = hwy, color = class))
+  geom_point(mapping = aes(x = displ, y = hwy, color = class))+
+  ggtitle("Making Class the Color")
 ```
 
 We could observe something similar in the clustering.  I am color blind so if there are too many colors, I cannot distinguish them all.  The defaults are normally fine for me but the fancier folks try to get the harder it is for me to distinguish the colors.  In a large dataset, faceting would be necessary as the color would blob over each other with some entries right on top of each other. 
@@ -104,53 +112,58 @@ ggplot(data = house, aes(y = SalePrice, x = GrLivArea, color = OverallQual, size
   facet_wrap(~Neighborhood) +
   geom_point()+
   scale_x_log10() +
-  scale_y_log10()
+  scale_y_log10() +
+  ggtitle("Kitchen Sink Scatter")
 ```
 
-Not as good as I hoped for the kitchen sink method.  Did a bit of playing around to try to make it usable but not sure you can glean much from it. I did get 6 peices of info represented in one graph so there is somthing to say for that.  I do like the different roof styles as those shapes too. 
+Not as good as I hoped for the kitchen sink method.  Did a bit of playing around to try to make it usable but not sure you can glean much from it. I did get 6 peices of info represented in one graph so there is something to say for that.  I do like the different roof styles as those shapes too. 
 
 Let's try another!  I did not know what was meant by sploms, but I had seen these before and even had used the `GGally` package before.  I picked the CentralAir for color because I am sweating in my office right now...
 ```{r}
 names(house)[c(5,14,16,17,38,74,73,66)]
 ```
 ```{r}
-library(GGally)
-ggpairs(house[,names(house)[c(5,14,16,17,38,74,73,66)]], aes(colour = CentralAir, alpha = 0.4))
+
+ggpairs(house[,names(house)[c(5,14,16,17,38,74,73,66)]], aes(colour = CentralAir, alpha = 0.4))+
+  ggtitle("Splom Graph of a Few Variables")
 ```
-After a bunch of tries to get this code to compile, I limited the data available to it in the hopes of improving runtime.  I think the graphic is niffty and perhaps reveals some correlations.
+After a bunch of tries to get this code to compile, I limited the data available to it in the hopes of improving runtime.  I think the graphic is niffty and perhaps reveals some correlations.  Honestly, I have a hard time gleaning much from the multitude of graphics.  You have them all but my eyes glaze over and I cannot really look at any one of them for info.  Not the biggest fan of this method.
 
 I'm going to keep moving through the suggested plots and try parallel histograms.  I am most interested in location, location, location.  So I think that effects house price the most.
 
 ```{r}
 ggplot(data = house, aes(x = SalePrice, color = CentralAir))+
   geom_histogram(fill = "white") +
-  facet_wrap(~Neighborhood )
+  facet_wrap(~Neighborhood ) +
+  ggtitle("Location, Location, Location")
 ```
-Still a bit fixated on the central air question.  Cannot really see many houses without it but where you can they mostly fall in the cheaper range.
+Still a bit fixated on the central air question.  Cannot really see many houses without it but where you can they mostly fall in the cheaper range.  We do see a variation in the histograms based on location.
 
 I'll try the ridge plot next because I think those are cool
 ```{r}
-library(ggridges)
 
 ggplot(data = house, aes(x = SalePrice, y = Neighborhood, fill = Neighborhood))+
   geom_density_ridges()+
   theme_ridges()+ 
-  theme(legend.position = "none")
+  theme(legend.position = "none")+
+  ggtitle("Location Ridge Plot")
 
 ```
+My ridge plots reinforce my previous statement that location matters.  I think this does a much better job than the histograms too.
 
 I had never seen a missing value visualization so I'll try a few here for my last exercise.  Of course you need another library for it.
 
 ```{r}
-library(naniar)
-
 vis_miss(house)
 ```
 
-This graphic feels overwhelming.Let's look for patterns in this data.
+This graphic feels overwhelming.  We do see that there is a lot of missing data in a couple of columns but I am not clear which ones they are based on the names overwriting each other.  I would not have included this graphic except that I wanted to find the command again later.
+
+Let's look for patterns in this data.
 ```{r}
 gg_miss_upset(house)
 ```
 
 This one is very informative, it shows some of the counts and the connections with missed data.  Very cool!
 
+So I have 6 total but I find the penultimate to be cheeky and not a very good representation of the data so I did not want to include it as one of the good ones...

@@ -1,0 +1,33 @@
+---
+title: "Assignment 3 PCA"
+author: "Nicholas Jacob"
+date: "2024-09-05"
+output: pdf_document
+---
+
+```{r setup}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Glass Data
+
+1.a. I'll load the data directly from the UCI repo.
+
+```{r}
+names <- c('Id', 'RI','Na','Mg', 'Al', 'Si', 'K', 'Ca', 'Ba', 'Fe', 'Type')
+Glass <- read.csv('glass.data',header = FALSE)
+names(Glass)<- names
+head(Glass)
+```
+
+Let's double check that there isn't a duplicate since there was a warning about a possible dup.
+```{r}
+any(!duplicated(Glass))
+```
+
+Does not appear to be any duplicates in this dataset.
+
+```{r}
+corMat <- cor(Glass)
+corMat
+```
