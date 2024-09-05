@@ -6,12 +6,14 @@ output: pdf_document
 ---
 
 ```{r setup}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = FALSE)
+library(ggplot2)
+library(corrplot)
 ```
 
 ## Glass Data
 
-1.a. I'll load the data directly from the UCI repo.
+1.a.i I'll load the data directly from my machine.  I wanted to load it directly from the web but seems as though those links don't exist anymore.  I've added the names from the info included in the zip file with the data.
 
 ```{r}
 names <- c('Id', 'RI','Na','Mg', 'Al', 'Si', 'K', 'Ca', 'Ba', 'Fe', 'Type')
@@ -31,3 +33,65 @@ Does not appear to be any duplicates in this dataset.
 corMat <- cor(Glass)
 corMat
 ```
+1.a.ii. Compute the eigen values and vectors of this matrix.
+
+```{r}
+eMat <- eigen(corMat)
+eMat
+```
+
+As expected for the correlation matrix, all values are positive.  Eigen vectors don't show me much yet.
+
+1.a.iii.  Next we'll do the principle component decomposition
+
+```{r}
+pMat <- prcomp(Glass,scale = TRUE)
+pMat
+```
+
+1.a.iv. These are different but I don't recall why...  Look me up before you submit.
+
+1.a.v.  Show that these vectors are orthogonal to eachother.
+```{r}
+eMat$vectors[,1]
+```
+```{r}
+sum(pMat$rotation[,1]*eMat$vectors[,1])
+```
+```{r}
+idMat <- data.frame(matrix(nrow = 11, ncol = 11))
+for(i in 1:11){
+  for (j in 1:11){
+    idMat[i,j] <- sum(pMat$rotation[,i]*eMat$vectors[,j])
+  }
+}
+idMat
+```
+
+We this is essentially an identity matrix but it has the overflow errors.  Let's force those to be zero.
+
+```{r}
+idMat[abs(idMat)<0.00000001] = 0
+idMat
+```
+
+We might be worried about the negative ones, but we recall that the inner product is negative one if the vectors point opposite each other but otherwise the same direction.
+
+1.b.i.
+
+```{r}
+heatmap(corMat, main = "Heatmap of Correlation for Glass Data", scale = "column", Rowv = NA, Colv = NA)
+```
+
+I tried for a while to get a scale for the colors on this graph and failed to find it.  I am going to use the package suggest of `corrplot` and of course it works great and has the scale that I wanted in the defaults.  Yeah open source for the win!
+```{r}
+corrplot(corMat)
+```
+1.b.ii.
+
+To look at the PCA, I'll start with the overloaded `plot` from the S3 method included with the `prcomp` function.  The scree plot follows
+```{r}
+plot(pMat, main = "Scree Plot for PCA of Glass", xlab = "PCA Components")
+```
+
+I don't quite see the hockey stick I expected.  I also expected this to be normalized to one but here we see variances above 1 which is odd and not what I recalled in scree plots.
