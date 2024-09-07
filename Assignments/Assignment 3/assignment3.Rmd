@@ -29,10 +29,10 @@ Let's double check that there isn't a duplicate since there was a warning about 
 any(!duplicated(Glass))
 ```
 
-Does not appear to be any duplicates in this dataset.
+Does not appear to be any duplicates in this dataset.  Now we'll create the correlation matrix.  We should remove the 'Id' and 'Type from the data before we do the correlation.
 
 ```{r}
-corMat <- cor(Glass[,-11])
+corMat <- cor(Glass[,2:10])
 corMat
 ```
 1.a.ii. Compute the eigen values and vectors of this matrix.
@@ -47,7 +47,7 @@ As expected for the correlation matrix, all values are positive.  Eigen vectors 
 1.a.iii.  Next we'll do the principle component decomposition
 
 ```{r}
-pMat <- prcomp(Glass[,-11],scale = TRUE)
+pMat <- prcomp(Glass[,2:10],scale = TRUE)
 pMat
 ```
 
@@ -69,11 +69,11 @@ We simply asked R to do that with base packages.
 sum(pMat$rotation[,1]*eMat$vectors[,1])
 ```
 
-We see that this one is indeed 1 as expected.  Let's build a matrix of all $10^2$ possible combinations.  Yes some are repeated but that does not increase runtime significantly for this data.
+We see that this one is indeed 1 as expected.  Let's build a matrix of all $9^2$ possible combinations.  Yes some are repeated but that does not increase runtime significantly for this data.
 ```{r}
-idMat <- data.frame(matrix(nrow = 10, ncol = 10)) #initialize matrix
-for(i in 1:10){
-  for (j in 1:10){
+idMat <- data.frame(matrix(nrow = 9, ncol = 9)) #initialize matrix
+for(i in 1:9){
+  for (j in 1:9){
     idMat[i,j] <- sum(pMat$rotation[,i]*eMat$vectors[,j]) #add data to matrix
   }
 }
