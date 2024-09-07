@@ -1,5 +1,0 @@
-"0","ggplot(data = house, aes(y = SalePrice, x = GrLivArea, color = OverallQual, size = Exterior1st, shape = RoofStyle))+"
-"0","  facet_wrap(~Neighborhood) +"
-"0","  geom_point()+"
-"0","  scale_x_log10() +"
-"0","  scale_y_log10()"

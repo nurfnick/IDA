@@ -1,7 +1,0 @@
-"0","idMat <- data.frame(matrix(nrow = 11, ncol = 11))"
-"0","for(i in 1:11){"
-"0","  for (j in 1:11){"
-"0","    idMat[i,j] <- sum(pMat$rotation[,i]*eMat$vectors[,j])"
-"0","  }"
-"0","}"
-"0","idMat"

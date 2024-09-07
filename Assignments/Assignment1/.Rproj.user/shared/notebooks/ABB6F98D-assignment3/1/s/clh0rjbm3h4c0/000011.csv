@@ -1,4 +1,0 @@
-"0","names <- c('Id', 'RI','Na','Mg', 'Al', 'Si', 'K', 'Ca', 'Ba', 'Fe', 'Type')"
-"0","Glass <- read.csv('glass.data',header = FALSE)"
-"0","names(Glass)<- names"
-"0","head(Glass)"

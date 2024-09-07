@@ -1,2 +1,0 @@
-"0","library(GGally)"
-"0","ggpairs(house[,names(house)[c(5,14,16,17,38,74,73,66)]], aes(colour = CentralAir, alpha = 0.4))"

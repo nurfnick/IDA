@@ -1,2 +1,0 @@
-"0","house <- read.csv('housingData-1.csv')"
-"0","head(house)"

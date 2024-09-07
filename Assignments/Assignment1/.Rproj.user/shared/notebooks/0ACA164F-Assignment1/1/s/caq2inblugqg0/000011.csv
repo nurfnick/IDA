@@ -1,3 +1,0 @@
-"0","rownames (college) <- college [,1]"
-"0","college <- college [,-1]"
-"0","head(college)"

@@ -1,4 +1,0 @@
-"0","ggplot(data = mpg, aes(x = hwy,y = cyl)) +"
-"0","  geom_point() +"
-"0","  ggtitle(""Scatter of hwy VS cyl"")"
-"0",""

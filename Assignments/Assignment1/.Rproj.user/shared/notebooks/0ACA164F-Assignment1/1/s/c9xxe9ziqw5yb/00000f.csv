@@ -1,5 +1,0 @@
-"0","baseball[baseball$year<1954,'sf'] = 0 #set all sf before 1954 to 0"
-"0","baseball[is.na(baseball$hbp),'hbp'] = 0 #set all null values for hit by pitch to 0"
-"0","baseball <- baseball[baseball$ab>=50,]"
-"0",""
-"0",""
