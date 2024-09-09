@@ -13,6 +13,7 @@ library(ggfortify)
 library(MASS)
 library(caret)
 library(magrittr)
+library(dplyr)
 ```
 
 ## Glass Data
@@ -200,4 +201,39 @@ We see some separation in the first LDA but below in the second,  we see almost 
 ggplot(lda.data, aes(LD2)) +
   geom_histogram() +
   facet_grid(rows = "Type")
+```
+3.
+
+Load up the data and get it going...
+```{r}
+housingData = read.csv("/home/nurfnick/Documents/GitHub/IDA/Assignments/Assignment2/housingData-1.csv")
+hd <- housingData %>%
+  select_if(is.numeric) %>%
+  dplyr::mutate(age = YrSold - YearBuilt,
+              ageSinceRemodel = YrSold - YearRemodAdd,
+              ageofGarage = ifelse(is.na(GarageYrBlt), age, YrSold - GarageYrBlt)) %>%
+  dplyr::select(!c(Id,MSSubClass, LotFrontage, GarageYrBlt,
+                MiscVal, YrSold , MoSold, YearBuilt,
+                YearRemodAdd, MasVnrArea))
+```
+
+Next we will preform the PCA of the scaled data.
+```{r}
+hd.pca <- prcomp(hd,scale = TRUE)
+plot(hd.pca)
+```
+
+The scree plot shows that there is a lot of information stored in that first principle component.  Let's look at the vectors and see what contributes the most to the principle components.
+
+```{r}
+autoplot(hd.pca, data = hd, 
+         loadings = TRUE, 
+         loadings.colour = 'blue',
+         loadings.label = TRUE)
+```
+
+That is way too busy of a graph to glean much info.  Let's look to the correlations and see what we can get from that.
+
+```{r}
+cor(hd) %>% corrplot()
 ```
