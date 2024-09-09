@@ -156,15 +156,18 @@ $$
 $$
 
 1.c.iii.
+
+We make our predictions here
 ```{r}
 values <- predict(ldaData, transformed)
 #values$x[,1]
 #ldahist(data = values$x[,1], g = Glass$Type)
 ```
-
+This is the overloaded plot for the lda.  I am always curious to see these for new methods I use.
 ```{r}
 plot(ldaData, col = as.numeric(Glass$Type))
 ```
+A confusion table to check out the results
 ```{r}
 table(Orignial = Glass$Type, Predicted = values$class)
 ```
@@ -175,6 +178,8 @@ mean(values$class == Glass$Type)
 ```
 
 Correct about two thirds of the time, much better than guessing!
+
+A scatterplot of the LD1 and LD2 with coloring.
 
 ```{r}
 lda.data  <- cbind(transformed,predict(ldaData)$x)
