@@ -10,6 +10,7 @@ knitr::opts_chunk$set(echo = FALSE)
 library(ggplot2)
 library(corrplot)
 library(ggfortify)
+library(MASS)
 ```
 
 ## Glass Data
@@ -29,7 +30,7 @@ Let's double check that there isn't a duplicate since there was a warning about 
 any(!duplicated(Glass))
 ```
 
-Does not appear to be any duplicates in this dataset.  Now we'll create the correlation matrix.  We should remove the 'Id' and 'Type from the data before we do the correlation.
+Does not appear to be any duplicates in this dataset.  Now we'll create the correlation matrix.  We should remove the 'Id' and 'Type' from the data before we do the correlation.  Originally we saw strong correlation between Id and Type only because the data was organized by type
 
 ```{r}
 corMat <- cor(Glass[,2:10])
@@ -51,7 +52,7 @@ pMat <- prcomp(Glass[,2:10],scale = TRUE)
 pMat
 ```
 
-1.a.iv. These are different but I don't recall why...  Look me up before you submit.
+1.a.iv. These are different.  The correlation is a scaled version of the covariance matrix so essentially, these are built off of similar matrices up to a rescaling.  If before building the correlation e-values, we did a $z$-score rescaling they would be exactly the same.  Instead as we will see in the next section, they both form the same ortho-normal basis.
 
 1.a.v.  Show that these vectors are orthogonal to each other.
 
@@ -95,7 +96,7 @@ We might be worried about the negative ones, but we recall that the inner produc
 heatmap(corMat, main = "Heatmap of Correlation for Glass Data", scale = "column", Rowv = NA, Colv = NA)
 ```
 
-I tried for a while to get a scale for the colors on this graph and failed to find it.  I am going to use the package suggest of `corrplot` and of course it works great and has the scale that I wanted in the defaults.  Yeah open source for the win!
+I tried for a while to get a scale for the colors on this graph and failed to find it.  I am going to use the package suggestion of `corrplot` and of course it works great and has the scale that I wanted in the defaults.  Yeah open source for the win!
 ```{r}
 corrplot(corMat)
 ```
@@ -112,10 +113,45 @@ plot(pMat, main = "Scree Plot for PCA of Glass", xlab = "PCA Components")
 I don't quite see the hockey stick I expected.  I also expected this to be normalized to one but here we see variances above 1 which is odd and not what I recalled in scree plots.
 
 ```{r}
-autoplot(pMat, data = Glass, color = "Type", loadings = TRUE)+
+autoplot(pMat, data = Glass, 
+         color = "Type", 
+         loadings = TRUE, 
+         loadings.colour = 'blue',
+         loadings.label = TRUE)+
   scale_color_manual(breaks = c("1","2","3","5","6","7"),
                     values =c("red","blue","green","violet","yellow","black"))
 ```
-```{r}
+1.b.iii.
 
+The first two components of the PCA provide the direction in the 9 dimensional space in which the most variance is explained.  We see that 27.9\% and 22.7\% of the variance are explained in these two directions.  We also see that iron (fe) and silicon (si) contribute negligibly to the first two PCAs.  This first direction of the PCA is dominated by Al, Ca, and RI. The second component is dominated by Mg and Ba.
+
+1.b.iv.
+
+There is some value to this PCA but only covering about 50\% of the variation has some drawbacks.  The lack of the hockeystick in the scree plot also makes me hesitant to use this PCA.  Besides all this, the dataset is relatively small dimensional at 9 dimensions.  Reducing to two or three dimensions would allow for slightly faster computations but overall, I do not think it is worth it here only getting 50\% of the variation.  No, I would not suggest using the PCA in this case.
+
+1.c.i.
+
+```{r}
+ldaData <- lda(Type~., Glass[2:11])
+ldaData
 ```
+
+1.c.ii.  I need to watch the videos...
+
+But I think this means you can predict the type by taking the data and doing the following linear transformation on it 
+
+$$
+311.7*RI+2.4*Na + 0.7*Mg + 3.3*Al + 2.5*Si + 1.6*K +1* Ca +2.3*Ba - .5*Fe
+$$
+
+1.c.iii.
+```{r}
+values <- predict(ldaData, Glass[2:11])
+values$x[,1]
+ldahist(data = values$x[,1], g = Glass$Type)
+```
+
+```{r}
+plot(ldaData, col = as.numeric(Glass$Type))
+```
+
