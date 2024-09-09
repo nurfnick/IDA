@@ -11,6 +11,8 @@ library(ggplot2)
 library(corrplot)
 library(ggfortify)
 library(MASS)
+library(caret)
+library(magrittr)
 ```
 
 ## Glass Data
@@ -130,28 +132,67 @@ The first two components of the PCA provide the direction in the 9 dimensional s
 There is some value to this PCA but only covering about 50\% of the variation has some drawbacks.  The lack of the hockeystick in the scree plot also makes me hesitant to use this PCA.  Besides all this, the dataset is relatively small dimensional at 9 dimensions.  Reducing to two or three dimensions would allow for slightly faster computations but overall, I do not think it is worth it here only getting 50\% of the variation.  No, I would not suggest using the PCA in this case.
 
 1.c.i.
+First, I will mean center the data.
 
 ```{r}
-ldaData <- lda(Type~., Glass[2:11])
+preproc.param <- Glass[2:11] %>% preProcess(method = c("center","scale"))
+
+transformed <- preproc.param %>% predict(Glass[2:11])
+
+
+```
+
+Now we will apply the LDA transformation on the transformed data.
+```{r}
+ldaData <- lda(Type~., transformed)
 ldaData
 ```
 
-1.c.ii.  I need to watch the videos...
-
-But I think this means you can predict the type by taking the data and doing the following linear transformation on it 
+1.c.ii.  We see that the first LD1 projection picks about 81.45\% of the differences of the means.  We see that Na, Al, Si and Ca are the most important variables in our determining which class the class belongs to.
+We can use the following formula to make our predictions with the LDA1.
 
 $$
-311.7*RI+2.4*Na + 0.7*Mg + 3.3*Al + 2.5*Si + 1.6*K +1* Ca +2.3*Ba - .5*Fe
+0.94*RI+1.94*Na + 1.06*Mg + 1.66*Al + 1.90*Si + 1.02*K +1.43* Ca +1.15*Ba - .05*Fe
 $$
 
 1.c.iii.
 ```{r}
-values <- predict(ldaData, Glass[2:11])
-values$x[,1]
-ldahist(data = values$x[,1], g = Glass$Type)
+values <- predict(ldaData, transformed)
+#values$x[,1]
+#ldahist(data = values$x[,1], g = Glass$Type)
 ```
 
 ```{r}
 plot(ldaData, col = as.numeric(Glass$Type))
 ```
+```{r}
+table(Orignial = Glass$Type, Predicted = values$class)
+```
+We see in our confusion table that we did well but not perfect.  Let's see what it actually did
 
+```{r}
+mean(values$class == Glass$Type)
+```
+
+Correct about two thirds of the time, much better than guessing!
+
+```{r}
+lda.data  <- cbind(transformed,predict(ldaData)$x)
+ggplot(lda.data, aes(LD1,LD2)) +
+  geom_point(aes(color = Type))
+```
+
+We do not see perfect separation and understand why our results are not a bit stronger.  I could not get the command `ldahist` to compile on my machine.  Instead I went ahead and used ggplot to create something equivalent.
+
+```{r}
+ggplot(lda.data, aes(LD1)) +
+  geom_histogram() +
+  facet_grid(rows = "Type")
+```
+We see some separation in the first LDA but below in the second,  we see almost none.
+
+```{r}
+ggplot(lda.data, aes(LD2)) +
+  geom_histogram() +
+  facet_grid(rows = "Type")
+```
