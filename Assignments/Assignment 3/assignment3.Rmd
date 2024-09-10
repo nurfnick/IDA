@@ -5,8 +5,8 @@ date: "2024-09-05"
 output: pdf_document
 ---
 
-```{r setup}
-knitr::opts_chunk$set(echo = FALSE)
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE)
 library(ggplot2)
 library(corrplot)
 library(ggfortify)
@@ -14,13 +14,16 @@ library(MASS)
 library(caret)
 library(magrittr)
 library(dplyr)
+library(HSAUR2)
+library(outliers)
+library(ggbiplot)
 ```
 
 ## Glass Data
 
 1.a.i I'll load the data directly from my machine.  I wanted to load it directly from the web but seems as though those links don't exist anymore.  I've added the names from the info included in the zip file with the data.
 
-```{r}
+```{r, include =TRUE}
 names <- c('Id', 'RI','Na','Mg', 'Al', 'Si', 'K', 'Ca', 'Ba', 'Fe', 'Type')
 Glass <- read.csv('glass.data',header = FALSE)
 names(Glass)<- names
@@ -202,11 +205,122 @@ ggplot(lda.data, aes(LD2)) +
   geom_histogram() +
   facet_grid(rows = "Type")
 ```
+
+2a.
+```{r 2a1}
+# Load the data
+data("heptathlon", package = "HSAUR2")
+
+# Apply Grubbs' test to each event
+outlier_tests <- apply(heptathlon[, 1:7], 2, function(x) grubbs.test(x))
+
+# Print out the results
+outlier_tests
+```
+According to this test,  the competitor Launa (PNG) is identified as an outlier in multiple events: 
+
+1. Hurdles: Highest value 16.42 is an outlier, with a p-value of 0.000436 (very strong evidence).
+2. High jump: Lowest value 1.5 is an outlier, with a p-value of 0.0001698 (very strong evidence).
+3. Long jump: Lowest value 4.88 is an outlier, with a p-value of 0.04594 (moderate evidence).
+4. 800m run: Highest value 163.43 is an outlier, with a p-value of 0.001808 (strong evidence).
+
+Remove Launa (PNG) from the dataset as she is consistently identified as an outlier across multiple events.
+
+```{r 2a2}
+heptathlon_cleaned <- heptathlon[-which(rownames(heptathlon) == "Launa (PNG)"), ]
+```
+
+2b.
+
+```{r 2b1}
+# Identify the columns for the running events
+running_events <- c("hurdles", "run200m", "run800m")
+
+# Apply the transformation: subtract each value from the maximum value in its column
+heptathlon_cleaned[running_events] <- apply(
+  heptathlon_cleaned[running_events],2,
+  function(x) max(x) - x)
+```
+
+By transforming all the running events by subtracting each athlete's time from the maximum recorded time in the event, we can more easily compare performance across events where higher values consistently represent better outcomes.
+
+```{r 2b2}
+# Check the transformed data for running events
+head(heptathlon_cleaned[running_events])
+```
+
+2c.
+
+```{r 2c}
+# Perform PCA on the 7 event results
+Hpca <- prcomp(heptathlon_cleaned[, 1:7], scale. = TRUE)
+
+# View a summary of the PCA results
+summary(Hpca)
+
+# Check the rotation matrix (loadings)
+Hpca$rotation
+
+# Check the PCA scores (principal components)
+head(Hpca$x)
+```
+
+2d.
+```{r 2d}
+# Visualize the first two principal components using ggbiplot
+ggbiplot(Hpca, obs.scale = 1, var.scale = 1, 
+         circle = TRUE) +
+  ggtitle("PCA Biplot of Heptathlon Events") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+```
+PC1 (explains 61.8% of the variance): Separates competitors based on running events (800m, 200m, hurdles). Athletes with higher PC1 scores performed better in running events, while those with lower PC1 scores did better in field events (high jump, javelin).
+
+PC2 (explains 12.8% of the variance): Mainly reflects performance in the high jump. Athletes with higher PC2 scores excelled in high jump.
+
+Event Correlation:
+
+1. Running events (800m, 200m, hurdles) are positively related, as their arrows point in similar directions.
+
+2. Field events (high jump, javelin) are negatively related to running events, meaning athletes who performed well in running events tended to perform worse in field events.
+
+Competitors: Athletes farther from the center of the plot showed more extreme performances (either very good or bad in certain events), while those closer to the center had more balanced performances across all events.
+
+2e.
+```{r 2e}
+# Assuming the heptathlon score is stored in a column called 'score' in the dataset
+# Replace 'score' with the actual column name if different
+heptathlon_scores <- heptathlon_cleaned$score
+
+# Plot heptathlon score vs. PC1 projections
+plot(Hpca$x[,1], heptathlon_scores, 
+     xlab = "PC1 Projections", 
+     ylab = "Heptathlon Score", 
+     main = "Heptathlon Score vs. PC1 Projections",
+     pch = 19, col = "blue")
+
+# Add a linear regression line to see the relationship
+abline(lm(heptathlon_scores ~ Hpca$x[,1]), col = "red")
+```
+
+The plot shows a negative linear relationship between the heptathlon score and PC1 projections. Since PC1 primarily reflects performance in running events, higher PC1 values indicate stronger performance in these events. The negative slope of the regression line suggests that competitors with lower PC1 projections tend to have higher overall heptathlon scores. This indicates that excelling in running events plays a significant role in achieving a higher overall score. Conversely, competitors with higher PC1 values tend to have lower total scores, meaning weaker performance in running events is associated with a lower heptathlon score.
+
+In summary, the plot highlights that performance in running events is a key factor in determining a competitor's overall heptathlon success.
+
+
+
+
+
+
+
+
+
 3.
 
 Load up the data and get it going...
 ```{r}
-housingData = read.csv("/home/nurfnick/Documents/GitHub/IDA/Assignments/Assignment2/housingData-1.csv")
+housingData = read.csv("housingData-1.csv")
 hd <- housingData %>%
   select_if(is.numeric) %>%
   dplyr::mutate(age = YrSold - YearBuilt,
