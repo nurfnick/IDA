@@ -21,7 +21,7 @@ library(ggbiplot)
 
 ## Glass Data
 
-1.a.i I'll load the data directly from my machine.  I wanted to load it directly from the web but seems as though those links don't exist anymore.  I've added the names from the info included in the zip file with the data.
+1.a.i We'll load the data directly from our machine.  We've added the names from the info included in the zip file with the data.
 
 ```{r, include =TRUE}
 names <- c('Id', 'RI','Na','Mg', 'Al', 'Si', 'K', 'Ca', 'Ba', 'Fe', 'Type')
@@ -36,12 +36,16 @@ Let's double check that there isn't a duplicate since there was a warning about 
 any(!duplicated(Glass))
 ```
 
-Does not appear to be any duplicates in this dataset.  Now we'll create the correlation matrix.  We should remove the 'Id' and 'Type' from the data before we do the correlation.  Originally we saw strong correlation between Id and Type only because the data was organized by type
+Does not appear to be any duplicates in this dataset.  
+
+Now we'll create the correlation matrix.  We should remove the 'Id' and 'Type' from the data before we do the correlation.  Originally we saw strong correlation between Id and Type only because the data was ordered by type
 
 ```{r}
 corMat <- cor(Glass[,2:10])
 corMat
 ```
+No ridiculously strong correlations but RI-CA is about 0.8 so it is fairly strong.
+
 1.a.ii. Compute the eigen values and vectors of this matrix.
 
 ```{r}
@@ -57,6 +61,7 @@ As expected for the correlation matrix, all values are positive.  Eigen vectors 
 pMat <- prcomp(Glass[,2:10],scale = TRUE)
 pMat
 ```
+We see RI and Ca well represented in the first PCA vector.
 
 1.a.iv. These are different.  The correlation is a scaled version of the covariance matrix so essentially, these are built off of similar matrices up to a rescaling.  If before building the correlation e-values, we did a $z$-score rescaling they would be exactly the same.  Instead as we will see in the next section, they both form the same ortho-normal basis.
 
@@ -94,7 +99,7 @@ idMat[abs(idMat)<0.00000001] = 0 #force really small values to be zero so you ca
 idMat
 ```
 
-We might be worried about the negative ones, but we recall that the inner product is negative one if the vectors point opposite each other but otherwise the same direction.  So we do see that these two matrix have a orthonormal column space.
+We might be worried about the negative ones, but we recall that the inner product is negative one if the vectors point opposite each other but otherwise the same direction.  So we do see that these two matrix have a orthonormal column space (up to a negative direction).
 
 1.b.i.
 
@@ -127,6 +132,9 @@ autoplot(pMat, data = Glass,
   scale_color_manual(breaks = c("1","2","3","5","6","7"),
                     values =c("red","blue","green","violet","yellow","black"))
 ```
+
+We like like this graphic a lot for showing off the different categories and the amount of the components in the PCA directions.
+
 1.b.iii.
 
 The first two components of the PCA provide the direction in the 9 dimensional space in which the most variance is explained.  We see that 27.9\% and 22.7\% of the variance are explained in these two directions.  We also see that iron (fe) and silicon (si) contribute negligibly to the first two PCAs.  This first direction of the PCA is dominated by Al, Ca, and RI. The second component is dominated by Mg and Ba.
@@ -207,6 +215,8 @@ ggplot(lda.data, aes(LD2)) +
 ```
 
 2a.
+
+Load the data and run on outlier test on the data.
 ```{r 2a1}
 # Load the data
 data("heptathlon", package = "HSAUR2")
