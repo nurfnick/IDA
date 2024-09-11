@@ -63,7 +63,7 @@ pMat
 ```
 We see RI and Ca well represented in the first PCA vector.
 
-1.a.iv. These are different.  The correlation is a scaled version of the covariance matrix so essentially, these are built off of similar matrices up to a rescaling.  If before building the correlation e-values, we did a $z$-score rescaling they would be exactly the same.  Instead as we will see in the next section, they both form the same ortho-normal basis.
+1.a.iv. The evectors and the PCA are different.  The correlation is a scaled version of the covariance matrix so essentially, these are built off of similar matrices up to a rescaling.  If before building the correlation e-values, we did a $z$-score rescaling they would be exactly the same.  Instead as we will see in the next section, they both form the same ortho-normal basis.
 
 1.a.v.  Show that these vectors are orthogonal to each other.
 
@@ -81,7 +81,7 @@ We simply asked R to do that with base packages.
 sum(pMat$rotation[,1]*eMat$vectors[,1])
 ```
 
-We see that this one is indeed 1 as expected.  Let's build a matrix of all $9^2$ possible combinations.  Yes some are repeated but that does not increase runtime significantly for this data.
+We see that this one is indeed 1 (perhaps in absolute value) as expected.  Let's build a matrix of all $9^2$ possible combinations.  Yes some are repeated but that does not increase runtime significantly for this data.
 ```{r}
 idMat <- data.frame(matrix(nrow = 9, ncol = 9)) #initialize matrix
 for(i in 1:9){
@@ -112,7 +112,7 @@ I tried for a while to get a scale for the colors on this graph and failed to fi
 corrplot(corMat)
 ```
 
-Yes there are two solutions here but I find it important to show that sometimes the base package just doesn't have what you want.
+Yes there are two solutions here but I find it important to show that sometimes the base package just doesn't have what you want.  Again with the strong correlation Ca-RI.
 
 1.b.ii.
 
@@ -357,11 +357,12 @@ autoplot(hd.pca, data = hd,
          loadings.label = TRUE)
 ```
 
-That is way too busy of a graph to glean much info.  Let's look to the correlations and see what we can get from that.
+That is way too busy of a graph to glean much info.  We do get the percentages of the PC1 and PC2 at about 36\% which is great for such high dimensional data.  We see the age variables, garage, price and squarefootage variables in the first PCA.  In the second we see some of the bathroom variables, kitchen and garage.  This does give us some ideas about what is most important in the data.  Let's look to the correlations and see what we can get from that.
 
 ```{r}
-cor(hd) %>% corrplot()
+cor(hd) %>% corrplot(method = "circle", type = "lower", tl.cex = 0.6)
 ```
+
 The correlation heatmap provides an understanding of how different property characteristics are related.From the correlation heatmap we can find:
 
 Key Drivers of Sale Price:
@@ -379,4 +380,6 @@ House Age (age) and Time Since Remodel (ageSinceRemodel) are negatively correlat
 Minimal Impact:
 
 Features like Pool Area and Enclosed Porch don't seem to affect the sale price much.
+
+
 
