@@ -67,7 +67,7 @@ We see RI and Ca well represented in the first PCA vector.
 
 1.a.v.  Show that these vectors are orthogonal to each other.
 
-First, I needed to see how to access the vectors
+First, we needed to see how to access the vectors
 ```{r}
 eMat$vectors[,1] #
 ```
@@ -107,21 +107,21 @@ We might be worried about the negative ones, but we recall that the inner produc
 heatmap(corMat, main = "Heatmap of Correlation for Glass Data", scale = "column", Rowv = NA, Colv = NA)
 ```
 
-I tried for a while to get a scale for the colors on this graph and failed to find it.  I am going to use the package suggestion of `corrplot` and of course it works great and has the scale that I wanted in the defaults.  Yeah open source for the win!
+We tried for a while to get a scale for the colors on this graph and failed to find it.  We are going to use the package suggestion of `corrplot` and of course it works great and has the scale that we wanted in the defaults.  Yeah open source for the win!
 ```{r}
 corrplot(corMat)
 ```
 
-Yes there are two solutions here but I find it important to show that sometimes the base package just doesn't have what you want.  Again with the strong correlation Ca-RI.
+Yes, there are two solutions here but we find it important to show that sometimes the base package just doesn't have what you want.  Again with the strong correlation Ca-RI.
 
 1.b.ii.
 
-To look at the PCA, I'll start with the overloaded `plot` from the S3 method included with the `prcomp` function.  The scree plot follows
+To look at the PCA, we'll start with the overloaded `plot` from the S3 method included with the `prcomp` function.  The scree plot follows
 ```{r}
 plot(pMat, main = "Scree Plot for PCA of Glass", xlab = "PCA Components")
 ```
 
-I don't quite see the hockey stick I expected.  I also expected this to be normalized to one but here we see variances above 1 which is odd and not what I recalled in scree plots.  Lastly, we generate an excellent visualization of the PCA that includes the Type colored and the PCA directions for interpretation.
+We don't quite see the hockey stick we expected. We also expected this to be normalized to one but here we see variances above 1 which is odd and not what we recalled in scree plots.  Lastly, we generate an excellent visualization of the PCA that includes the Type colored and the PCA directions for interpretation.
 
 
 ```{r}
@@ -142,10 +142,10 @@ The first two components of the PCA provide the direction in the 9 dimensional s
 
 1.b.iv.
 
-There is some value to this PCA but only covering about 50\% of the variation has some drawbacks.  The lack of the hockeystick in the scree plot also makes me hesitant to use this PCA.  Besides all this, the dataset is relatively small dimensional at 9 dimensions.  Reducing to two or three dimensions would allow for slightly faster computations but overall, I do not think it is worth it here only getting 50\% of the variation.  No, I would not suggest using the PCA in this case.
+There is some value to this PCA but only covering about 50\% of the variation has some drawbacks.  The lack of the hockeystick in the scree plot also makes me hesitant to use this PCA.  Besides all this, the dataset is relatively small dimensional at 9 dimensions.  Reducing to two or three dimensions would allow for slightly faster computations but overall, we do not think it is worth it here only getting 50\% of the variation.  No, we would not suggest using the PCA in this case.
 
 1.c.i.
-First, I will mean center the data.
+First, we will mean center the data.
 
 ```{r}
 preproc.param <- Glass[2:11] %>% preProcess(method = c("center","scale"))
@@ -176,7 +176,7 @@ values <- predict(ldaData, transformed)
 #values$x[,1]
 #ldahist(data = values$x[,1], g = Glass$Type)
 ```
-This is the overloaded plot for the lda.  I am always curious to see these for new methods I use.
+This is the overloaded plot for the lda.  We are always curious to see these for new methods we use.
 ```{r}
 plot(ldaData, col = as.numeric(Glass$Type))
 ```
@@ -200,7 +200,7 @@ ggplot(lda.data, aes(LD1,LD2)) +
   geom_point(aes(color = Type))
 ```
 
-We do not see perfect separation and understand why our results are not a bit stronger.  I could not get the command `ldahist` to compile on my machine.  Instead I went ahead and used ggplot to create something equivalent.
+We do not see perfect separation and understand why our results are not a bit stronger.  We could not get the command `ldahist` to compile on my machine.  Instead, we went ahead and used ggplot to create something equivalent.
 
 ```{r}
 ggplot(lda.data, aes(LD1)) +
@@ -238,6 +238,7 @@ According to this test,  the competitor Launa (PNG) is identified as an outlier 
 Remove Launa (PNG) from the dataset as she is consistently identified as an outlier across multiple events.
 
 ```{r 2a2}
+# Remove Launa (PNG) from the dataset
 heptathlon_cleaned <- heptathlon[-which(rownames(heptathlon) == "Launa (PNG)"), ]
 ```
 
@@ -270,10 +271,10 @@ Hpca <- prcomp(heptathlon_cleaned[, 1:7], scale. = TRUE)
 # View a summary of the PCA results
 summary(Hpca)
 
-# Check the rotation matrix (loadings)
+# Check the rotation matrix 
 Hpca$rotation
 
-# Check the PCA scores (principal components)
+# Check the PCA scores 
 head(Hpca$x)
 ```
 
@@ -301,8 +302,7 @@ Competitors: Athletes farther from the center of the plot showed more extreme pe
 
 2e.
 ```{r 2e}
-# Assuming the heptathlon score is stored in a column called 'score' in the dataset
-# Replace 'score' with the actual column name if different
+# Identify the columns for the score
 heptathlon_scores <- heptathlon_cleaned$score
 
 # Plot heptathlon score vs. PC1 projections
