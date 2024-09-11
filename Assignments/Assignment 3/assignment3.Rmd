@@ -251,6 +251,7 @@ heptathlon_cleaned[running_events] <- apply(
   heptathlon_cleaned[running_events],2,
   function(x) max(x) - x)
 ```
+$$ x_{\text{transformed}} = x_{\text{max}} - x $$
 
 By transforming all the running events by subtracting each athlete's time from the maximum recorded time in the event, we can more easily compare performance across events where higher values consistently represent better outcomes.
 
@@ -361,3 +362,21 @@ That is way too busy of a graph to glean much info.  Let's look to the correlati
 ```{r}
 cor(hd) %>% corrplot()
 ```
+The correlation heatmap provides an understanding of how different property characteristics are related.From the correlation heatmap we can find:
+
+Key Drivers of Sale Price:
+
+1. Overall Quality (OverallQual) and Above-Ground Living Area (GrLivArea) are the strongest predictors of house price, meaning better quality and larger homes tend to sell for higher prices.
+
+2. Garage Size (GarageCars, GarageArea) also plays an important role, with larger garages linked to higher sale prices.
+
+3. Basement Size (TotalBsmtSF) and First-Floor Area (X1stFlrSF) are highly correlated, and larger homes overall lead to higher sale prices.
+
+Negative Influences:
+
+House Age (age) and Time Since Remodel (ageSinceRemodel) are negatively correlated with sale price. This suggests newer homes or homes that were recently remodeled tend to sell for more.
+
+Minimal Impact:
+
+Features like Pool Area and Enclosed Porch don't seem to affect the sale price much.
+
