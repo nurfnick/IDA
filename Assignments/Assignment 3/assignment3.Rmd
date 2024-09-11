@@ -92,7 +92,7 @@ for(i in 1:9){
 idMat #print matrix
 ```
 
-We this is essentially an identity matrix but it has the overflow errors.  Let's force those to be zero.
+We see this is essentially an identity matrix but it has the overflow errors.  Let's force those to be zero.
 
 ```{r}
 idMat[abs(idMat)<0.00000001] = 0 #force really small values to be zero so you can inspect
@@ -121,7 +121,8 @@ To look at the PCA, I'll start with the overloaded `plot` from the S3 method inc
 plot(pMat, main = "Scree Plot for PCA of Glass", xlab = "PCA Components")
 ```
 
-I don't quite see the hockey stick I expected.  I also expected this to be normalized to one but here we see variances above 1 which is odd and not what I recalled in scree plots.
+I don't quite see the hockey stick I expected.  I also expected this to be normalized to one but here we see variances above 1 which is odd and not what I recalled in scree plots.  Lastly, we generate an excellent visualization of the PCA that includes the Type colored and the PCA directions for interpretation.
+
 
 ```{r}
 autoplot(pMat, data = Glass, 
