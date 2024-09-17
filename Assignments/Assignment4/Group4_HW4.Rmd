@@ -1,0 +1,93 @@
+---
+title: "Assignment 4 Data Wrangling"
+author: "Nicholas Jacob and Zayne Mclaughlin"
+date: "2024-09-05"
+output: pdf_document
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(corrplot)
+library(ggfortify)
+library(MASS)
+library(caret)
+library(magrittr)
+library(dplyr)
+library(HSAUR2)
+library(outliers)
+library(ggbiplot)
+library(GGally)
+library(gridExtra)
+```
+
+1.
+```{r}
+housingData = read.csv("GitHub/IDA/Assignments/Assignment2/housingData-1.csv")
+```
+
+
+2.a.
+
+I notice two examples of skewed data, `YearBuilt` and `SalePrice`.  The skews are in opposite directions so that is fun!  First I try the Year built.  Here is the visulaization.
+
+```{r}
+yb <- ggplot(data = housingData, aes(x = YearBuilt)) +
+  geom_histogram() +
+  ggtitle("Year Built is Skewed") +
+  xlab("Year Built")
+yb
+```
+
+Very bimodal and skewed to the current time.  Apply the `boxcox` function.
+
+```{r}
+b<-boxcox(lm(housingData$YearBuilt~1), lambda = seq(-4,50,1/10)) #tweaked the limits until found the correct parameter for this
+lambda <- b$x[which.max(b$y)] #find the max
+lambda
+```
+
+This is the optimal $\lambda$.
+
+```{r}
+mytitle <- paste("Boxcox with lambda=", lambda)
+ybm <- housingData %>%
+  mutate(YearBuiltMod = (YearBuilt^lambda-1)/lambda) %>%
+  ggplot( aes(x = YearBuiltMod)) +
+  geom_histogram() +
+  ggtitle(mytitle) +
+  xlab("Year Built")
+
+grid.arrange(yb,ybm, nrow = 1)
+```
+This is much better but by no means perfect.  Looks like the year built was quite a difficult column due to the bimodal distribution.
+
+I am going to look at the Sale Price.  These are notorious for not being normal.
+
+```{r}
+sp <- ggplot(data = housingData, aes(x = SalePrice)) +
+  geom_histogram() +
+  ggtitle("Sale Price is Skewed") +
+  xlab("Sale Price")
+
+sp
+```
+```{r}
+b<-boxcox(lm(housingData$SalePrice~1), lambda = seq(-4,4,1/10))
+lambda <- b$x[which.max(b$y)]
+lambda
+```
+
+```{r}
+mytitle <- paste("Boxcox with lambda=", lambda)
+spm <- housingData %>%
+  mutate(SalePriceMod = (SalePrice^lambda -1)/lambda) %>%
+  ggplot( aes(x = SalePriceMod)) +
+  geom_histogram() +
+  ggtitle(mytitle) +
+  xlab("Sale Price")
+
+grid.arrange(sp,spm, nrow = 1)
+```
+
+That looks much better.  Quite normal and ready for analysis.
