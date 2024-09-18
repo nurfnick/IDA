@@ -19,6 +19,8 @@ library(outliers)
 library(ggbiplot)
 library(GGally)
 library(gridExtra)
+library(mice)
+library(forcats)
 ```
 
 1.
@@ -110,11 +112,114 @@ housingData <- housingData %>%
 
 b.ii.
 
-Now we'll impute with a linear regression.  Since we are trying to predict something about the lot, I keep only variables with information about the outside of the house.  I could not use `Alley` because it did not have enough levels to fit the linear model.  I could not use `LotShape` due to some shapes not being in the training data.  I could not use `Fence` either due to many missing values.
+Now we'll impute with a linear regression and some error depending on that regression.  Since we are trying to predict something about the lot, I keep only variables with information about the outside of the house.  I could not use `Alley` because it did not have enough levels to fit the linear model.  I could not use `LotShape` due to some shapes not being in the training data.  I could not use `Fence` either due to many missing values.
 ```{r}
 names(housingData)[c(4,5,8,9)] #find the names of variables that will work 
 fit <- lm(LotFrontage ~ ., data=housingData[,names(housingData)[c(4,5,8,9)]]) #do linear fit
+summary(fit)
+```
+We see that the fit is decent with most of the variables that we have used showing signifigance.
+
+Now we make predictions and impute.
+```{r}
 pred <- predict(fit,housingData[,names(housingData)[c(4,5,8,9)]] ) #create predictions
+se <- summary(fit)[[6]] #standard error of the fit
 housingData <- housingData%>%
-  mutate(LFLM = if_else(is.na(LotFrontage),pred,LotFrontage)) #add the new column
+  mutate(LFLM = if_else(is.na(LotFrontage),pred + rnorm(length(pred),0,se),LotFrontage)) #add the new column
+```
+
+b.iii.
+
+We use the `mice` package for predictive mean matching.  Here I used LotArea and SalePrice to build the model.  This package would not work with any missing values.
+```{r}
+housingData$LFPMM <- housingData$LotFrontage #create a new column with all the values
+housingData[missing,"LFPMM"] =  mice.impute.pmm(housingData$LotFrontage,!missing,housingData[,names(housingData)[c(5,74)]]) #replace na's with predictions
+```
+
+b.iv.
+
+Time to visualize.
+
+```{r}
+colors <- c("Original" = "blue", "Impute with Mean" = "yellow", "Impute with Regression" = "red", "Impute with PMM" = "orange")
+g1 <- ggplot(housingData)+
+  geom_histogram(aes(x = LotFrontage, fill = "Original"),alpha = 0.5) +
+  geom_histogram(aes(x = LFMean, fill = "Impute with Mean"),alpha = 0.5) +
+  labs(title = "Impute by Mean",  fill = "legend")+
+  scale_color_manual(values = colors) +
+  coord_cartesian(xlim = c(0,350))
+g2 <- ggplot(housingData)+
+  geom_histogram(aes(x = LotFrontage, fill = "Original"),alpha = 0.5) +
+  geom_histogram(aes(x = LFLM, fill = "Impute with Regression"),alpha = 0.5) +
+  labs(title = "Impute by Regression",  fill = "legend")+
+  scale_color_manual(values = colors) +
+  coord_cartesian(xlim = c(0,350))
+g3 <- ggplot(housingData)+
+  geom_histogram(aes(x = LotFrontage, fill = "Original"),alpha = 0.5) +
+  geom_histogram(aes(x = LFPMM, fill = "Impute with PMM"),alpha = 0.5) +
+  labs(title = "Impute by PMM",  fill = "legend")+
+  scale_color_manual(values = colors) +
+  coord_cartesian(xlim = c(0,350))
+
+grid.arrange(g1,g2,g3)
+```
+
+We see some of what was expected.  The mean imputation really returns that same value a lot.  The regression imputation is better and the pmm seems best.  
+
+2.c.
+Create 5 levels for the variable `Exterior1st`.  Here is the original counts sorted.
+```{r}
+housingData %>%
+  dplyr::count(Exterior1st, sort = TRUE) #somewhere I masked the dplyr count function
+```
+```{r}
+housingData %>%
+  mutate(Exterior1st = fct_lump(Exterior1st,n=4)) %>% #this will create 4 categories with the 5th being other
+  dplyr::count(Exterior1st, sort = TRUE)
+```
+
+2.d.i.
+
+We use `dplyr` again for this noticing that some of the functions need to be called with package name.
+```{r}
+housingData %>% 
+  dplyr::group_by(Neighborhood) %>%
+  dplyr::summarise(average = mean(SalePrice)) %>%
+  arrange(desc(average))
+```
+
+2.d.ii.
+Create a boxplot of the saleprice with neighborhoods.
+
+```{r}
+ggplot(housingData, aes(y = SalePrice, x = Neighborhood)) +
+  geom_boxplot()
+```
+
+2.d.iii.
+```{r}
+housingData <- housingData %>%
+  mutate(Neighborhood = factor(Neighborhood)) %>% #turn the data into a factor
+  mutate(Neighborhood = fct_reorder(Neighborhood,SalePrice, .desc = TRUE)) #reorder the data uses median by default
+
+```
+2.d.iv.
+
+Since the data has been reordered, we only need to call ggplot.
+```{r}
+housingData %>%
+  ggplot(aes(x= Neighborhood, y = SalePrice)) +
+  geom_boxplot() +
+  labs(title = "Sale Price Box Plot", x = "Neighborhood")+
+  scale_x_discrete(guide = guide_axis(n.dodge=3)) #just to get the variables to dodge
+```
+
+
+```{r, include = FALSE}
+housingData %>%
+  ggplot(aes(fct_reorder(Neighborhood,SalePrice, .desc = TRUE),SalePrice)) + #uses median by default
+  geom_boxplot() +
+  labs(x = "Neighborhood")+
+  scale_x_discrete(guide = guide_axis(n.dodge=3)) #just to get the variables to dodge
+  
 ```
