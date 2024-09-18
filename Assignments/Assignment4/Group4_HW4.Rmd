@@ -29,7 +29,7 @@ housingData = read.csv("GitHub/IDA/Assignments/Assignment2/housingData-1.csv")
 
 2.a.
 
-I notice two examples of skewed data, `YearBuilt` and `SalePrice`.  The skews are in opposite directions so that is fun!  First I try the Year built.  Here is the visulaization.
+I notice two examples of skewed data, `YearBuilt` and `SalePrice`.  The skews are in opposite directions so that is fun!  First I try the Year built.  Here is the visualization.
 
 ```{r}
 yb <- ggplot(data = housingData, aes(x = YearBuilt)) +
@@ -60,7 +60,7 @@ ybm <- housingData %>%
 
 grid.arrange(yb,ybm, nrow = 1)
 ```
-This is much better but by no means perfect.  Looks like the year built was quite a difficult column due to the bimodal distribution.
+This is much better but by no means perfect.  Looks like the year built was quite a difficult column due to the bi-modal distribution.
 
 I am going to look at the Sale Price.  These are notorious for not being normal.
 
@@ -91,3 +91,30 @@ grid.arrange(sp,spm, nrow = 1)
 ```
 
 That looks much better.  Quite normal and ready for analysis.
+
+2.b.i.
+
+Looking to `LotFrontage`, we see lots of missing values.
+```{r}
+missing <- is.na(housingData$LotFrontage) #find the missing values
+sum(missing) #give a total
+```
+We impute first by replacing it with the mean.
+
+```{r}
+avg <- mean(housingData$LotFrontage, na.rm = TRUE) #get the mean before imputing
+housingData <- housingData %>%
+  mutate(LFMean = if_else(is.na(LotFrontage), avg,LotFrontage)) #create a new column imputed with the mean
+  
+```
+
+b.ii.
+
+Now we'll impute with a linear regression.  Since we are trying to predict something about the lot, I keep only variables with information about the outside of the house.  I could not use `Alley` because it did not have enough levels to fit the linear model.  I could not use `LotShape` due to some shapes not being in the training data.  I could not use `Fence` either due to many missing values.
+```{r}
+names(housingData)[c(4,5,8,9)] #find the names of variables that will work 
+fit <- lm(LotFrontage ~ ., data=housingData[,names(housingData)[c(4,5,8,9)]]) #do linear fit
+pred <- predict(fit,housingData[,names(housingData)[c(4,5,8,9)]] ) #create predictions
+housingData <- housingData%>%
+  mutate(LFLM = if_else(is.na(LotFrontage),pred,LotFrontage)) #add the new column
+```
