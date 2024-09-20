@@ -25,7 +25,17 @@ library(forcats)
 
 1.
 ```{r}
-housingData = read.csv("GitHub/IDA/Assignments/Assignment2/housingData-1.csv")
+housingData = read.csv("~/GitHub/IDA/Assignments/Assignment2/housingData-1.csv")
+
+housingData <- housingData %>%
+  dplyr::mutate(age = YrSold - YearBuilt, ageSinceRemodel = YrSold - YearRemodAdd, ageofGarage = YrSold - GarageYrBlt)
+```
+1.b.
+
+```{r}
+housingNumeric <- housingData %>% 
+  dplyr::select(is.numeric)
+
 ```
 
 
