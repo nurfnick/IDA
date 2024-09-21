@@ -63,6 +63,22 @@ quantile(x,na.rm=na.rm)[4]
 }
 ```
 
+1.f. Here is a function that will do the numeric computations for us.
+```{r}
+myNumericSummary <- function(x){
+  c(length(x), n_distinct(x), sum(is.na(x)), mean(x, na.rm=TRUE),
+  min(x,na.rm=TRUE), Q1(x,na.rm=TRUE), median(x,na.rm=TRUE), Q3(x,na.rm=TRUE),
+  max(x,na.rm=TRUE), sd(x,na.rm=TRUE))
+}
+```
+
+1.g.
+
+I think this is what was intended.  I did get this to work with `summarise_all` as well without the additional commands of `across` and `where`
+```{r}
+housingNumeric %>%
+  summarise(across(where(is.numeric),myNumericSummary))
+```
 2.a.
 
 I notice two examples of skewed data, `YearBuilt` and `SalePrice`.  The skews are in opposite directions so that is fun!  First I try the Year built.  Here is the visualization.
