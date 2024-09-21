@@ -19,13 +19,13 @@ library(outliers)
 library(ggbiplot)
 library(GGally)
 library(gridExtra)
-library(mice)
+#library(mice)
 library(forcats)
 ```
 
 1.
 ```{r}
-housingData = read.csv("~/GitHub/IDA/Assignments/Assignment2/housingData-1.csv")
+housingData = read.csv("housingData-1.csv")
 
 housingData <- housingData %>%
   dplyr::mutate(age = YrSold - YearBuilt, ageSinceRemodel = YrSold - YearRemodAdd, ageofGarage = YrSold - GarageYrBlt)
@@ -34,10 +34,34 @@ housingData <- housingData %>%
 
 ```{r}
 housingNumeric <- housingData %>% 
-  dplyr::select(is.numeric)
+  dplyr::select(where(is.numeric))
 
 ```
+1.c.
+```{r}
+housingFactor <- housingData %>% 
+  dplyr::select(where(is.character))%>%
+  mutate_all(factor)
+```
 
+1.d.
+```{r}
+glimpse(housingFactor)
+```
+```{r}
+glimpse(housingNumeric)
+```
+1.e.
+
+The following functions create a $Q_1$ and $Q_3$ function that takes a vector $x$ and an optional `na.rm` which by default has been set to true.  Then it calls the `quantile` function and extracts the second and the fourth element from the five number summary giving just the $Q_1$ and $Q_3$.
+```{r}
+Q1<-function(x,na.rm=TRUE) {
+quantile(x,na.rm=na.rm)[2]
+}
+Q3<-function(x,na.rm=TRUE) {
+quantile(x,na.rm=na.rm)[4]
+}
+```
 
 2.a.
 
