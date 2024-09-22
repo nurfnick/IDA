@@ -7,6 +7,7 @@ output: pdf_document
 
 ```{r setup, include = FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
 library(ggplot2)
 library(corrplot)
 library(ggfortify)
@@ -76,9 +77,17 @@ myNumericSummary <- function(x){
 
 I think this is what was intended.  I did get this to work with `summarise_all` as well without the additional commands of `across` and `where`
 ```{r}
-housingNumeric %>%
+numericSummary <- housingNumeric %>%
   summarise(across(where(is.numeric),myNumericSummary))
+
+glimpse(numericSummary)
 ```
+1.h.
+```{r}
+numericSummary <-cbind(stat=c("n","unique","missing","mean","min","Q1","median",
+                              "Q3","max","sd"),numericSummary)
+```
+
 2.a.
 
 I notice two examples of skewed data, `YearBuilt` and `SalePrice`.  The skews are in opposite directions so that is fun!  First I try the Year built.  Here is the visualization.
