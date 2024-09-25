@@ -22,6 +22,7 @@ library(GGally)
 library(gridExtra)
 #library(mice)
 library(forcats)
+library(knitr)
 ```
 
 1.
@@ -86,6 +87,89 @@ glimpse(numericSummary)
 ```{r}
 numericSummary <-cbind(stat=c("n","unique","missing","mean","min","Q1","median",
                               "Q3","max","sd"),numericSummary)
+```
+
+1.i.
+```{r}
+numericSummaryFinal <- numericSummary %>%
+  tidyr::pivot_longer("Id":"ageofGarage", names_to = "variable", values_to = "value") %>%
+  tidyr::pivot_wider(names_from = stat, values_from = value) %>%
+  dplyr::mutate(missing_pct = 100*missing/n,
+         unique_pct = 100*unique/n) %>%
+  dplyr::select(variable, n, missing, missing_pct, unique, unique_pct, everything())
+
+options(digits=3)
+options(scipen=99)
+numericSummaryFinal %>% kable()
+```
+1.j.
+```{r}
+getmodes <- function(v,type=1) {
+tbl <- table(v)
+m1<-which.max(tbl)
+if (type==1) {
+return (names(m1)) #1st mode
+}
+else if (type==2) {
+return (names(which.max(tbl[-m1]))) #2nd mode
+}
+else if (type==-1) {
+return (names(which.min(tbl))) #least common mode
+}
+else {
+stop("Invalid type selected")
+}
+}
+getmodesCnt <- function(v,type=1) {
+tbl <- table(v)
+m1<-which.max(tbl)
+if (type==1) {
+return (max(tbl)) #1st mode freq
+}
+else if (type==2) {
+return (max(tbl[-m1])) #2nd mode freq
+}
+else if (type==-1) {
+return (min(tbl)) #least common freq
+}
+else {
+stop("Invalid type selected")
+}
+}
+```
+
+```{r}
+myCategoricalSummary <- function(x){
+  c(length(x),sum(is.na(x)), n_distinct(x),
+  getmodes(x,1),getmodesCnt(x,1),getmodes(x,2),getmodesCnt(x,2),getmodes(x,-1),getmodesCnt(x,-1))
+}
+
+myCategoricalSummary(housingData$MSZoning)
+```
+
+```{r}
+factorSummary <- housingFactor %>%
+  summarise(across(where(is.factor),myCategoricalSummary))
+
+factorSummary<-cbind(stat=c("n","missing","unique",
+                             "1st mode", "first_mode_freq","2nd mode",
+                            "second_mode_freq","least common","least common freq"),
+                     factorSummary)
+glimpse(factorSummary)
+```
+
+```{r}
+factorSummaryFinal <- factorSummary %>%
+  tidyr::pivot_longer("MSZoning":"SaleType", names_to = "variable", values_to = "value") %>%
+  tidyr::pivot_wider(names_from = stat, values_from = value) %>%
+  dplyr::mutate(missing_pct = 100*as.numeric(missing)/as.numeric(n),
+         unique_pct = 100*as.numeric(unique)/as.numeric(n), 
+         freqRatio = as.numeric(first_mode_freq)/as.numeric(second_mode_freq)) %>%
+  dplyr::select(variable, n, missing, missing_pct, unique, unique_pct,freqRatio, everything())
+
+options(digits=3)
+options(scipen=99)
+factorSummaryFinal %>% kable()
 ```
 
 2.a.
