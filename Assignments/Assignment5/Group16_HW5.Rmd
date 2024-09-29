@@ -1,0 +1,49 @@
+---
+title: "Assignment 5 Predictions"
+author: "Nicholas Jacob and Yechang Qi"
+date: "2024-09-05"
+output: pdf_document
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+library(ggplot2)
+library(corrplot)
+library(ggfortify)
+library(MASS)
+library(caret)
+library(magrittr)
+library(dplyr)
+library(HSAUR2)
+library(outliers)
+library(ggbiplot)
+library(GGally)
+library(gridExtra)
+#library(mice)
+library(forcats)
+library(knitr)
+```
+# Predicting House Prices
+
+1a.
+
+```{r}
+housingData = read_csv("housingData-1.csv")
+
+housingFactor <- housingData %>% 
+  dplyr::select(where(is.character))%>%
+  mutate_all(factor) %>%
+  mutate_all(fct_na_value_to_level) #Needed to convert NA's to a level to make the regression have enough data to go.
+
+housingNumeric <- housingData %>% 
+  dplyr::select(where(is.numeric)) %>%
+  mutate_if(is.numeric, ~replace(., is.na(.), 0))
+
+housingData <- cbind(housingFactor, housingNumeric)
+
+
+OLM <- lm(log(SalePrice) ~ ., data= housingData )
+
+summary(OLM)
+```
