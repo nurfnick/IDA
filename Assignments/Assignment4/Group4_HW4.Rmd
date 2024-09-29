@@ -20,12 +20,14 @@ library(outliers)
 library(ggbiplot)
 library(GGally)
 library(gridExtra)
-#library(mice)
+library(mice)
 library(forcats)
 library(knitr)
 ```
 
 1.
+Loading the housing data and calculating the age, ageSinceRemodel, and ageofGarage columns. 
+
 ```{r}
 housingData = read.csv("housingData-1.csv")
 
@@ -34,12 +36,15 @@ housingData <- housingData %>%
 ```
 1.b.
 
+Selecting only the numeric variables from the housing dataset
 ```{r}
 housingNumeric <- housingData %>% 
   dplyr::select(where(is.numeric))
 
 ```
 1.c.
+
+Selecting only the character variables from the housing dataset and converting them to factors.
 ```{r}
 housingFactor <- housingData %>% 
   dplyr::select(where(is.character))%>%
@@ -47,6 +52,8 @@ housingFactor <- housingData %>%
 ```
 
 1.d.
+
+Using glimpse to check the structure of the new housingFactor and housingNumeric tibbles.
 ```{r}
 glimpse(housingFactor)
 ```
@@ -79,11 +86,13 @@ myNumericSummary <- function(x){
 I think this is what was intended.  I did get this to work with `summarise_all` as well without the additional commands of `across` and `where`
 ```{r}
 numericSummary <- housingNumeric %>%
-  summarise(across(where(is.numeric),myNumericSummary))
+  summarise_all(myNumericSummary) #Applying the custom myNumericSummary function to all variables in the dataset. 
 
 glimpse(numericSummary)
 ```
 1.h.
+
+Adding descriptive stat names as the first column to the numeric summary table.
 ```{r}
 numericSummary <-cbind(stat=c("n","unique","missing","mean","min","Q1","median",
                               "Q3","max","sd"),numericSummary)
@@ -93,16 +102,19 @@ numericSummary <-cbind(stat=c("n","unique","missing","mean","min","Q1","median",
 ```{r}
 numericSummaryFinal <- numericSummary %>%
   tidyr::pivot_longer("Id":"ageofGarage", names_to = "variable", values_to = "value") %>%
-  tidyr::pivot_wider(names_from = stat, values_from = value) %>%
+  tidyr::pivot_wider(names_from = stat, values_from = value) %>%#Pivoting the numeric summary table to make it longer and then wider for readability, 
   dplyr::mutate(missing_pct = 100*missing/n,
          unique_pct = 100*unique/n) %>%
   dplyr::select(variable, n, missing, missing_pct, unique, unique_pct, everything())
+#Adding percentage calculations for missing and unique values. 
 
-options(digits=3)
+options(digits=3)#limit the number of digits in the table
 options(scipen=99)
-numericSummaryFinal %>% kable()
+numericSummaryFinal %>% kable()#display table nicely when knitted
 ```
 1.j.
+
+Helper functions to compute the modes of a vector, including the first, second, and least common modes, as well as their frequencies. 
 ```{r}
 getmodes <- function(v,type=1) {
 tbl <- table(v)
@@ -137,7 +149,7 @@ stop("Invalid type selected")
 }
 }
 ```
-
+Next, I'll package all the functions (that don't rely on another computation) together
 ```{r}
 myCategoricalSummary <- function(x){
   c(length(x),sum(is.na(x)), n_distinct(x),
@@ -146,15 +158,16 @@ myCategoricalSummary <- function(x){
 
 myCategoricalSummary(housingData$MSZoning)
 ```
+Test looks good.  Now we `summarize` all the data.
 
 ```{r}
 factorSummary <- housingFactor %>%
-  summarise(across(where(is.factor),myCategoricalSummary))
+  summarise_all(myCategoricalSummary)
 
 factorSummary<-cbind(stat=c("n","missing","unique",
                              "1st mode", "first_mode_freq","2nd mode",
                             "second_mode_freq","least common","least common freq"),
-                     factorSummary)
+                     factorSummary) #add titles becarefule to omit spaces for ones we need again.
 glimpse(factorSummary)
 ```
 
@@ -162,14 +175,14 @@ glimpse(factorSummary)
 factorSummaryFinal <- factorSummary %>%
   tidyr::pivot_longer("MSZoning":"SaleType", names_to = "variable", values_to = "value") %>%
   tidyr::pivot_wider(names_from = stat, values_from = value) %>%
-  dplyr::mutate(missing_pct = 100*as.numeric(missing)/as.numeric(n),
-         unique_pct = 100*as.numeric(unique)/as.numeric(n), 
-         freqRatio = as.numeric(first_mode_freq)/as.numeric(second_mode_freq)) %>%
+  dplyr::mutate(missing_pct = 100*as.numeric(missing)/as.numeric(n),#compute missing_pct
+         unique_pct = 100*as.numeric(unique)/as.numeric(n), #unique percent
+         freqRatio = as.numeric(first_mode_freq)/as.numeric(second_mode_freq)) %>% #freqRatio as defined in assignment
   dplyr::select(variable, n, missing, missing_pct, unique, unique_pct,freqRatio, everything())
 
 options(digits=3)
 options(scipen=99)
-factorSummaryFinal %>% kable()
+factorSummaryFinal %>% kable() #display nicely
 ```
 
 2.a.
@@ -261,7 +274,7 @@ names(housingData)[c(4,5,8,9)] #find the names of variables that will work
 fit <- lm(LotFrontage ~ ., data=housingData[,names(housingData)[c(4,5,8,9)]]) #do linear fit
 summary(fit)
 ```
-We see that the fit is decent with most of the variables that we have used showing signifigance.
+We see that the fit is decent with most of the variables that we have used showing significance.
 
 Now we make predictions and impute.
 ```{r}
