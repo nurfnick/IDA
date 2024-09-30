@@ -47,11 +47,17 @@ OLM <- lm(log(SalePrice) ~ ., data= housingData )
 
 summary(OLM)
 ```
-
+There are lots of variables here.  Let's see if we can reduce the number of variables
+```{r}
+fit1 <- stepAIC(OLM, direction = "both")
+```
+```{r}
+fit1$call$formula
+```
 ```{r}
 fitControl <- trainControl(method="cv", number=5)
 
-fit <- train(log(SalePrice)~.,
+fit <- train(fit1$call$formula,
              data=housingData,
              method="lm",
              trControl=fitControl)
@@ -59,4 +65,11 @@ fit <- train(log(SalePrice)~.,
 fit
 
 #fit$resample
+```
+
+What if we look at some interactions.
+```{r}
+OLMwI <- lm(log(SalePrice)~.+.*., data = housingData)
+summary(OLMwI)
+#fit1 <- stepAIC(OLMwI, direction = "both")
 ```
