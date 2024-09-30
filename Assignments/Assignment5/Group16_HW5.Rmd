@@ -47,3 +47,16 @@ OLM <- lm(log(SalePrice) ~ ., data= housingData )
 
 summary(OLM)
 ```
+
+```{r}
+fitControl <- trainControl(method="cv", number=5)
+
+fit <- train(log(SalePrice)~.,
+             data=housingData,
+             method="lm",
+             trControl=fitControl)
+
+fit
+
+#fit$resample
+```
