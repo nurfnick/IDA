@@ -23,13 +23,16 @@ library(gridExtra)
 #library(mice)
 library(forcats)
 library(knitr)
+library(car)
 ```
 # Predicting House Prices
 
 1a.
 
+We start by reading in the data and doing some cleaning.  With the large presence of `Na`s in the data, we convert `Na` into a factor for factor data and...
+
 ```{r}
-housingData = read_csv("housingData-1.csv")
+housingData = read.csv("housingData-1.csv")
 
 housingFactor <- housingData %>% 
   dplyr::select(where(is.character))%>%
@@ -47,13 +50,17 @@ OLM <- lm(log(SalePrice) ~ ., data= housingData )
 
 summary(OLM)
 ```
-There are lots of variables here.  Let's see if we can reduce the number of variables
-```{r}
+There are lots of variables here.  Let's see if we can reduce the number of variables.  The following code starts with the complete model from above and addes or removes features based on $AIC$, attempting to minimize this value.  We have hidden the results because they were very long.
+```{r, results = 'hide'}
 fit1 <- stepAIC(OLM, direction = "both")
 ```
+Below is the formula for the best found in the above process.
 ```{r}
 fit1$call$formula
+fit1$coefficients
 ```
+Now that we have found this linear fit, we run a 5 fold cross validation to examine the 
+
 ```{r}
 fitControl <- trainControl(method="cv", number=5)
 
@@ -64,12 +71,39 @@ fit <- train(fit1$call$formula,
 
 fit
 
-#fit$resample
+fit$results
+
+```
+```{r}
+summary(fit)
+```
+```{r}
+fit <- lm(fit1$call$formula,
+             data=housingData)
+AIC(fit)
+BIC(fit)
+vif(fit)
 ```
 
-What if we look at some interactions.
-```{r}
-OLMwI <- lm(log(SalePrice)~.+.*., data = housingData)
-summary(OLMwI)
+
+
+Next we attempt to visualize some residuals.  
+```{r residualViz}
+housingData$Predicted <- predict(fit)
+housingData$logSalePrice <- log(housingData$SalePrice)
+ggplot(housingData, aes(x = YearBuilt, y = logSalePrice, color = Neighborhood)) +
+  geom_segment(aes(xend = YearBuilt, yend = Predicted), alpha = .2) +
+  geom_point()+
+  geom_point(aes(y = Predicted), shape = 1)
+  
+```
+
+
+
+
+
+```{r, include = FALSE}
+#OLMwI <- lm(log(SalePrice)~.^2, data = housingData)
+#summary(OLMwI)
 #fit1 <- stepAIC(OLMwI, direction = "both")
 ```
