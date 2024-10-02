@@ -63,7 +63,8 @@ fit1$coefficients
 Now that we have found this linear fit, we run a 5 fold cross validation to examine the 
 
 ```{r}
-fitControl <- trainControl(method="cv", number=5)
+fitControl <- trainControl(method="cv", number=5
+                           )
 
 fit <- train(fit1$call$formula,
              data=housingData,
@@ -83,12 +84,71 @@ fit <- lm(fit1$call$formula,
              data=housingData)
 AIC(fit)
 BIC(fit)
-vif(fit)
 ```
 
+```{r}
+plot(fit, which = 1)
+```
+Looking at the diagnostics here, we see a decent spread and while there are a few identified outliers, it is not too bad.  Diagnostically, we are looking for
+1.Points above and Below the line
+2. no patterns
+3. no change in variation (no cones)
+4. normal distribution
 
+While we think we have this, the hypothesis test shows otherwise.
+```{r}
+ncvTest(fit)
+```
+Oh, this is a problem!  We are able to reject the null hypothesis here, we have evidence to suggest that the error variance changes with the fitted values.  Let's keep looking at some of the other results we can get.
 
-Next we attempt to visualize some residuals.  
+```{r}
+hist(fit$residuals, breaks = 20)
+```
+This looks fairly normal but with a longer tail on the negative side than the positive.  Maybe qq-plot will show me something?
+```{r}
+plot(fit, which = 2)
+```
+Here we see our deviance from normal on that low end once again.  Next we look at the standardized residuals versus the predicted.
+
+```{r}
+scatterplot(fit$fitted.values,rstandard(fit))
+```
+Here we see plenty of outer space values (over 4) and some really strange (over 3)
+
+Next we look for values with high leverage.
+```{r}
+
+plot(index = 1:1000,hatvalues(fit))
+abline(h = 0.2)
+```
+We see lots with of points with high leverage (above the 0.2 line)
+```{r}
+sum(hatvalues(fit)>0.2)
+```
+10\% of our data has extreme leverage. 
+
+Let's test for outliers.
+
+```{r}
+outlierTest(fit)
+```
+We find two outliers that are influential.  Lastly we look at Cook's Distance.
+```{r}
+plot(cooks.distance(fit),rstudent(fit))
+```
+Not terrible but still some rather extreme points.
+
+```{r}
+influencePlot(fit)
+```
+This one is nice for seeing these issues.
+
+```{r}
+vif(fit)
+```
+There is definately some colinearity since the average is way over one.
+
+One more fancy visualization with `ggplot` and some residuals.  Not super useful but it was the first I put together and it looks pretty.
 
 
 ```{r residualViz}
@@ -126,13 +186,16 @@ plot(model.pls, ncomp = 16, asp = 1, line = TRUE)
 plot(model.pls, plottype = "scores", comps = 1:4)
 ```
 ```{r}
-model <- train(log(SalePrice) ~ .-logSalePrice - Predicted,
+
+model <- caret::train(log(SalePrice) ~ .-logSalePrice - Predicted,
                data = housingData,
-               method = "pls",
-               scale = TRUE,
-               trControl = fitControl,
-               tuneLength = 5
+               method = "lasso",
+              # scale = TRUE,
+               trControl = fitControl#,
+#               tuneLength = 10
                )
+
+model
 ```
 
 
