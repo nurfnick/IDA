@@ -9,21 +9,22 @@ output: pdf_document
 knitr::opts_chunk$set(echo = TRUE)
 knitr::opts_chunk$set(warning = FALSE, message = FALSE)
 library(ggplot2)
-library(corrplot)
-library(ggfortify)
-library(MASS)
+#library(corrplot)
+#library(ggfortify)
+#library(MASS)
 library(caret)
 library(magrittr)
 library(dplyr)
-library(HSAUR2)
-library(outliers)
-library(ggbiplot)
-library(GGally)
-library(gridExtra)
+#library(HSAUR2)
+#library(outliers)
+#library(ggbiplot)
+#library(GGally)
+#library(gridExtra)
 #library(mice)
 library(forcats)
 library(knitr)
 library(car)
+library(pls)
 ```
 # Predicting House Prices
 
@@ -50,7 +51,7 @@ OLM <- lm(log(SalePrice) ~ ., data= housingData )
 
 summary(OLM)
 ```
-There are lots of variables here.  Let's see if we can reduce the number of variables.  The following code starts with the complete model from above and addes or removes features based on $AIC$, attempting to minimize this value.  We have hidden the results because they were very long.
+There are lots of variables here.  Let's see if we can reduce the number of variables.  The following code starts with the complete model from above and adds or removes features based on $AIC$, attempting to minimize this value.  We have hidden the results because they were very long.
 ```{r, results = 'hide'}
 fit1 <- stepAIC(OLM, direction = "both")
 ```
@@ -88,22 +89,54 @@ vif(fit)
 
 
 Next we attempt to visualize some residuals.  
+
+
 ```{r residualViz}
 housingData$Predicted <- predict(fit)
 housingData$logSalePrice <- log(housingData$SalePrice)
-ggplot(housingData, aes(x = YearBuilt, y = logSalePrice, color = Neighborhood)) +
+ggplot(housingData, aes(x = YearBuilt, y = logSalePrice, color = Exterior1st)) +
   geom_segment(aes(xend = YearBuilt, yend = Predicted), alpha = .2) +
   geom_point()+
-  geom_point(aes(y = Predicted), shape = 1)
+  geom_point(aes(y = Predicted), shape = 1)+
+  facet_wrap(Neighborhood~.) 
   
+```
+1.b.
+
+```{r}
+model.pls <- pls::plsr(log(SalePrice) ~ .-logSalePrice - Predicted, 16, data = housingData, #method = "oscorespls", 
+                       validation = "CV")
+summary(model.pls)
+```
+```{r}
+model.pls$validation$PRESS
+```
+
+```{r}
+plot(model.pls)
+
+plot(model.pls, ncomp = 1, asp = 1, line = TRUE)
+plot(model.pls, ncomp = 2, asp = 1, line = TRUE)
+plot(model.pls, ncomp = 3, asp = 1, line = TRUE)
+plot(model.pls, ncomp = 4, asp = 1, line = TRUE)
+plot(model.pls, ncomp = 16, asp = 1, line = TRUE)
+```
+
+```{r}
+plot(model.pls, plottype = "scores", comps = 1:4)
+```
+```{r}
+model <- train(log(SalePrice) ~ .-logSalePrice - Predicted,
+               data = housingData,
+               method = "pls",
+               scale = TRUE,
+               trControl = fitControl,
+               tuneLength = 5
+               )
 ```
 
 
 
-
-
 ```{r, include = FALSE}
-#OLMwI <- lm(log(SalePrice)~.^2, data = housingData)
-#summary(OLMwI)
-#fit1 <- stepAIC(OLMwI, direction = "both")
+names(housingData)
 ```
