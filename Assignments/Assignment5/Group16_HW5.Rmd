@@ -11,7 +11,7 @@ knitr::opts_chunk$set(warning = FALSE, message = FALSE)
 library(ggplot2)
 #library(corrplot)
 #library(ggfortify)
-#library(MASS)
+library(MASS)
 library(caret)
 library(magrittr)
 library(dplyr)
@@ -25,6 +25,7 @@ library(forcats)
 library(knitr)
 library(car)
 library(pls)
+library(lars)
 ```
 # Predicting House Prices
 
@@ -47,18 +48,18 @@ housingNumeric <- housingData %>%
 housingData <- cbind(housingFactor, housingNumeric)
 
 
-OLM <- lm(log(SalePrice) ~ ., data= housingData )
+fitOLM <- lm(log(SalePrice) ~ ., data= housingData )
 
-summary(OLM)
+summary(fitOLM)
 ```
 There are lots of variables here.  Let's see if we can reduce the number of variables.  The following code starts with the complete model from above and adds or removes features based on $AIC$, attempting to minimize this value.  We have hidden the results because they were very long.
 ```{r, results = 'hide'}
-fit1 <- stepAIC(OLM, direction = "both")
+OLMSim <- stepAIC(OLM, direction = "both")
 ```
 Below is the formula for the best found in the above process.
 ```{r}
-fit1$call$formula
-fit1$coefficients
+OLMSim$call$formula
+OLMSim$coefficients
 ```
 Now that we have found this linear fit, we run a 5 fold cross validation to examine the 
 
@@ -66,21 +67,23 @@ Now that we have found this linear fit, we run a 5 fold cross validation to exam
 fitControl <- trainControl(method="cv", number=5
                            )
 
-fit <- train(fit1$call$formula,
+fitOLMSim <- train(OLMSim$call$formula,
              data=housingData,
              method="lm",
              trControl=fitControl)
 
-fit
+fitOLMSim
 
-fit$results
+fitOLMSim$results
 
 ```
 ```{r}
-summary(fit)
+summary(fitOLMSim)
 ```
+
+
 ```{r}
-fit <- lm(fit1$call$formula,
+fitOLMSim <- lm(OLMSim$call$formula,
              data=housingData)
 AIC(fit)
 BIC(fit)
@@ -185,18 +188,126 @@ plot(model.pls, ncomp = 16, asp = 1, line = TRUE)
 ```{r}
 plot(model.pls, plottype = "scores", comps = 1:4)
 ```
+
+1.c.
+
+We kept having issues getting `caret` to work so decided to look at the basic package that `caret` was using.  Quickly we recognized that the `lars` package requires only numerical data.  Once we saw that, we built a lasso model!
 ```{r}
 
-model <- caret::train(log(SalePrice) ~ .-logSalePrice - Predicted,
-               data = housingData,
+
+ 
+x<- as.matrix(housingNumeric)
+lars(x,housingData$logSalePrice,"lasso")
+
+```
+Next we want to tune the parameter to the best possible.
+
+```{r}
+
+model <- caret::train(log(SalePrice) ~ .,
+               data = housingNumeric,
                method = "lasso",
               # scale = TRUE,
-               trControl = fitControl#,
-#               tuneLength = 10
+               #trControl = fitControl#,
+               tuneLength = 10
                )
 
 model
 ```
+
+We see that 0.9 produced the best value, but let's keep tuning and see if we can do better.  I'll apply a grid too.
+
+```{r}
+lassoGrid <- expand.grid(fraction=seq(0.8,0.99,length=100))
+
+fitLasso <- train(log(SalePrice) ~ .,
+            data = housingNumeric,
+             method="lasso",
+             trControl=fitControl,
+             tuneGrid=lassoGrid)
+
+plot(fitLasso)
+
+fitLasso
+```
+```{r}
+fitLasso$bestTune
+```
+```{r}
+coef(fitLasso$finalModel,fitLasso$bestTune$fraction)# I cannot get this to work...
+```
+```{r}
+varImp(fitLasso, scale = FALSE)
+```
+
+1.d.
+
+Here is the elasticNet.  I played with the parameter grid for a bit too long.
+```{r}
+enetGrid <- expand.grid(lambda=seq(0,0.02,length=10),
+                        fraction=seq(.85,.90,length=10))
+
+fitEnet <- train(log(SalePrice) ~ .,
+            data = housingNumeric,
+             method="enet",
+             trControl=fitControl,
+             tuneGrid=enetGrid)
+
+plot(fitEnet, plotType="level")
+
+fitEnet
+```
+
+Again, lots of tuning but a nice value for the ridge regression and it's $\ell^2$ penalty.
+```{r}
+ridgeGrid <- expand.grid(lambda=seq(0.0025,0.015,length=10))
+
+fitRidge <- train(log(SalePrice) ~ .,
+            data = housingNumeric,
+             method="ridge",
+             trControl=fitControl,
+             tuneGrid=ridgeGrid)
+
+plot(fitRidge)
+
+fitRidge
+```
+I want to try the reduction technique with a full linear regression that includes two way interactions.
+```{r}
+fitOLMw2Way <- lm(log(SalePrice)~.*., data = housingNumeric)
+
+summary(fitOLMw2Way)
+```
+
+
+```{r, results = 'hide'}
+OLMSim2Way <- stepAIC(fitOLMw2Way, direction = "both")
+```
+```{r}
+OLMSim2Way$call$formula
+OLMSim2Way$coefficients
+```
+
+
+
+Now that we have found this linear fit, we run a 5 fold cross validation to examine the 
+
+```{r}
+
+
+fitOLMSim2Way <- train(OLMSim2Way$call$formula,
+             data=housingData,
+             method="lm",
+             trControl=fitControl)
+
+
+fitOLMSim2Way$results
+
+```
+```{r}
+summary(fitOLMSim2Way)
+```
+
 
 
 
