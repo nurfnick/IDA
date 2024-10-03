@@ -310,7 +310,13 @@ summary(fitOLMSim2Way)
 
 
 
-
-```{r, include = FALSE}
-names(housingData)
+```{r table, echo = FALSE, message = FALSE, warnings = FALSE, results = 'asis'}
+tabl <-paste("
+|Model          |Notes              |Hyperparameters| CVRMSE   |CV $R^2$|
+|-----------|---------------------|-----------------|-------:|-------:|
+|OLS |lm|N/A|",fitOLM$results$RMSE,fitOLM$results$Rsquared,sep = "|")
+cat(tabl)
+```
+```{r}
+summary(fitOLM)$r.squared
 ```
