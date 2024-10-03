@@ -48,13 +48,27 @@ housingNumeric <- housingData %>%
 housingData <- cbind(housingFactor, housingNumeric)
 
 
-fitOLM <- lm(log(SalePrice) ~ ., data= housingData )
+fit <- lm(log(SalePrice) ~ ., data= housingData )
 
-summary(fitOLM)
+summary(fit)
+```
+We run the cross validation on this model to see what it looks like.
+```{r}
+fitControl <- trainControl(method="cv", number=5
+                           )
+
+fitOLM <- train(log(SalePrice)~.,
+             data=housingData,
+             method="lm",
+             trControl=fitControl)
+
+fitOLM
 ```
 There are lots of variables here.  Let's see if we can reduce the number of variables.  The following code starts with the complete model from above and adds or removes features based on $AIC$, attempting to minimize this value.  We have hidden the results because they were very long.
 ```{r, results = 'hide'}
-OLMSim <- stepAIC(OLM, direction = "both")
+OLMSim <- stepAIC(fit, direction = "both")
+
+
 ```
 Below is the formula for the best found in the above process.
 ```{r}
@@ -64,8 +78,7 @@ OLMSim$coefficients
 Now that we have found this linear fit, we run a 5 fold cross validation to examine the 
 
 ```{r}
-fitControl <- trainControl(method="cv", number=5
-                           )
+
 
 fitOLMSim <- train(OLMSim$call$formula,
              data=housingData,
@@ -83,7 +96,7 @@ summary(fitOLMSim)
 
 
 ```{r}
-fitOLMSim <- lm(OLMSim$call$formula,
+fit <- lm(OLMSim$call$formula,
              data=housingData)
 AIC(fit)
 BIC(fit)
@@ -193,9 +206,6 @@ plot(model.pls, plottype = "scores", comps = 1:4)
 
 We kept having issues getting `caret` to work so decided to look at the basic package that `caret` was using.  Quickly we recognized that the `lars` package requires only numerical data.  Once we saw that, we built a lasso model!
 ```{r}
-
-
- 
 x<- as.matrix(housingNumeric)
 lars(x,housingData$logSalePrice,"lasso")
 
@@ -314,7 +324,11 @@ summary(fitOLMSim2Way)
 tabl <-paste("
 |Model          |Notes              |Hyperparameters| CVRMSE   |CV $R^2$|
 |-----------|---------------------|-----------------|-------:|-------:|
-|OLS |lm|N/A|",fitOLM$results$RMSE,fitOLM$results$Rsquared,sep = "|")
+|OLS |lm|N/A",
+fitOLM$results$RMSE,fitOLM$results$Rsquared,
+"|OLS Simplified| lm|N/A",
+fitOLMSim$results$RMSE,fitOLMSim$results$Rsquared,
+sep = "|")
 cat(tabl)
 ```
 ```{r}
