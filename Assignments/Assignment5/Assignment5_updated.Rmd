@@ -96,7 +96,7 @@ fitOLMSim$results
 summary(fitOLMSim)
 ```
 
-
+Now we start to examine the appropriateness of this as a linear model.  We look at many of the diagnostics available to us.
 ```{r}
 fit <- lm(OLMSim$call$formula,
              data=housingData)
@@ -164,10 +164,10 @@ This one is nice for seeing these issues.
 ```{r}
 vif(fit)
 ```
-There is definately some colinearity since the average is way over one.
+There is definitely some co-linearity since the average is way over one.
 
 We consider dropping Exterior2nd (as it's similar to Exterior1st), BsmtFinType2 (since BsmtFinType1 already accounts for basement type), and GarageCars (as GarageArea is a more interpretable metric).
-```{r updated}
+```{r updated1}
 # Update the formula string
 new_formula <- update(OLMSim$call$formula, . ~ . - Exterior2nd - BsmtUnfSF - GarageArea)
 
@@ -181,7 +181,7 @@ fitOLMSim
 
 fitOLMSim$results
 ```
-The reduction in RMSE and improvement in R-squared indicate that the removal of the multicollinear variables improved the predictive accuracy and overall model fit.
+The reduction in RMSE and improvement in R-squared indicate that the removal of the multi-co-linear variables improved the predictive accuracy and overall model fit.
 
 
 One more fancy visualization with `ggplot` and some residuals.  Not super useful but it was the first I put together and it looks pretty.
@@ -197,6 +197,8 @@ ggplot(housingData, aes(x = YearBuilt, y = logSalePrice, color = Exterior1st)) +
   
 ```
 1.b.
+
+Next we do the plsr model.  We'll use the entire dataset but we do need to remove the columns that were added for visualization purposes.
 
 ```{r}
 model.pls <- pls::plsr(log(SalePrice) ~ .-logSalePrice - Predicted, 16, data = housingData, #method = "oscorespls", 
@@ -221,8 +223,8 @@ plot(model.pls, ncomp = 16, asp = 1, line = TRUE)
 plot(model.pls, plottype = "scores", comps = 1:4)
 ```
 
-Based on the improvement in fit from 1 to 16 components and to avoid overfitting, 4 components seem to offer a good balance between predictive accuracy and model simplicity.
-```{r updated}
+Based on the improvement in fit from 1 to 16 components and to avoid over fitting, 4 components seem to offer a good balance between predictive accuracy and model simplicity.
+```{r updated2}
 validationplot(model.pls, val.type = "RMSEP")
 rmsep_4comps <- RMSEP(model.pls, ncomp = 4)$val[2]
 cat("Cross-validated RMSE for 4 components:", rmsep_4comps, "\n")
@@ -273,7 +275,7 @@ fitLasso$bestTune
 ```
 The RMSE for the model we choose is 0.1084523.
 
-```{r updated}
+```{r updated3}
 # Extract the coefficients at the optimal fraction using predict
 coefficients <- predict(fitLasso$finalModel, 
                         s = fitLasso$bestTune$fraction, 
@@ -378,6 +380,7 @@ best_ols2way_R2 <- fitOLMSim2Way$results$Rsquared
 summary(fitOLMSim2Way)
 ```
 
+Lastly we attempt the MARS method to fit linear splines on the data.
 ```{r}
 library(earth)
 
@@ -402,6 +405,7 @@ best_mars_RMSE <- best_mars$RMSE
 best_mars_R2 <- best_mars$Rsquared
 ```
 
+Our final results a presented here.
 ```{r table }
 # OLS (from fitOLM)
 best_ols_RMSE <- fitOLM$results$RMSE
@@ -437,6 +441,4 @@ results_table <- data.frame(
 library(knitr)
 kable(results_table, format = "markdown")
 ```
-```{r}
-summary(fitOLM)$r.squared
-```
+
