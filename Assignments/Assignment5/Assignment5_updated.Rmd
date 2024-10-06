@@ -405,7 +405,7 @@ best_mars_RMSE <- best_mars$RMSE
 best_mars_R2 <- best_mars$Rsquared
 ```
 
-Our final results a presented here.
+Our final results are presented here.
 ```{r table }
 # OLS (from fitOLM)
 best_ols_RMSE <- fitOLM$results$RMSE
