@@ -1,0 +1,442 @@
+---
+title: "Assignment 5 Predictions"
+author: "Nicholas Jacob and Yechang Qi"
+date: "2024-09-05"
+output: pdf_document
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+library(ggplot2)
+library(corrplot)
+library(earth)
+#library(ggfortify)
+library(MASS)
+library(caret)
+library(magrittr)
+library(dplyr)
+#library(HSAUR2)
+#library(outliers)
+#library(ggbiplot)
+#library(GGally)
+#library(gridExtra)
+#library(mice)
+library(forcats)
+library(knitr)
+library(car)
+library(pls)
+library(lars)
+```
+# Predicting House Prices
+
+1a.
+
+We start by reading in the data and doing some cleaning.  With the large presence of `Na`s in the data, we convert `Na` into a factor for factor data and...
+
+```{r}
+housingData = read.csv("housingData-1.csv")
+
+housingFactor <- housingData %>% 
+  dplyr::select(where(is.character))%>%
+  mutate_all(factor) %>%
+  mutate_all(fct_na_value_to_level) 
+#Needed to convert NA's to a level to make the regression have enough data to go.
+
+housingNumeric <- housingData %>% 
+  dplyr::select(where(is.numeric)) %>%
+  mutate_if(is.numeric, ~replace(., is.na(.), 0))
+
+housingData <- cbind(housingFactor, housingNumeric)
+
+
+fit <- lm(log(SalePrice) ~ ., data= housingData )
+
+summary(fit)
+```
+We run the cross validation on this model to see what it looks like.
+```{r}
+fitControl <- trainControl(method="cv", number=5
+                           )
+
+fitOLM <- train(log(SalePrice)~.,
+             data=housingData,
+             method="lm",
+             trControl=fitControl)
+
+fitOLM
+```
+There are lots of variables here.  Let's see if we can reduce the number of variables.  The following code starts with the complete model from above and adds or removes features based on $AIC$, attempting to minimize this value.  We have hidden the results because they were very long.
+```{r, results = 'hide'}
+OLMSim <- stepAIC(fit, direction = "both")
+
+
+```
+Below is the formula for the best found in the above process.
+```{r}
+OLMSim$call$formula
+OLMSim$coefficients
+```
+Now that we have found this linear fit, we run a 5 fold cross validation to examine the 
+
+```{r}
+
+
+fitOLMSim <- train(OLMSim$call$formula,
+             data=housingData,
+             method="lm",
+             trControl=fitControl)
+
+fitOLMSim
+
+fitOLMSim$results
+
+```
+```{r}
+summary(fitOLMSim)
+```
+
+
+```{r}
+fit <- lm(OLMSim$call$formula,
+             data=housingData)
+AIC(fit)
+BIC(fit)
+```
+
+```{r}
+plot(fit, which = 1)
+```
+Looking at the diagnostics here, we see a decent spread and while there are a few identified outliers, it is not too bad.  Diagnostically, we are looking for
+1.Points above and Below the line
+2. no patterns
+3. no change in variation (no cones)
+4. normal distribution
+
+While we think we have this, the hypothesis test shows otherwise.
+```{r}
+ncvTest(fit)
+```
+Oh, this is a problem!  We are able to reject the null hypothesis here, we have evidence to suggest that the error variance changes with the fitted values.  Let's keep looking at some of the other results we can get.
+
+```{r}
+hist(fit$residuals, breaks = 20)
+```
+This looks fairly normal but with a longer tail on the negative side than the positive.  Maybe qq-plot will show me something?
+```{r}
+plot(fit, which = 2)
+```
+Here we see our deviance from normal on that low end once again.  Next we look at the standardized residuals versus the predicted.
+
+```{r}
+scatterplot(fit$fitted.values,rstandard(fit))
+```
+Here we see plenty of outer space values (over 4) and some really strange (over 3)
+
+Next we look for values with high leverage.
+```{r}
+
+plot(index = 1:1000,hatvalues(fit))
+abline(h = 0.2)
+```
+We see lots with of points with high leverage (above the 0.2 line)
+```{r}
+sum(hatvalues(fit)>0.2)
+```
+10\% of our data has extreme leverage. 
+
+Let's test for outliers.
+
+```{r}
+outlierTest(fit)
+```
+We find two outliers that are influential.  Lastly we look at Cook's Distance.
+```{r}
+plot(cooks.distance(fit),rstudent(fit))
+```
+Not terrible but still some rather extreme points.
+
+```{r}
+influencePlot(fit)
+```
+This one is nice for seeing these issues.
+
+```{r}
+vif(fit)
+```
+There is definately some colinearity since the average is way over one.
+
+We consider dropping Exterior2nd (as it's similar to Exterior1st), BsmtFinType2 (since BsmtFinType1 already accounts for basement type), and GarageCars (as GarageArea is a more interpretable metric).
+```{r updated}
+# Update the formula string
+new_formula <- update(OLMSim$call$formula, . ~ . - Exterior2nd - BsmtUnfSF - GarageArea)
+
+
+fitOLMSim <- train(new_formula,
+             data=housingData,
+             method="lm",
+             trControl=fitControl)
+
+fitOLMSim
+
+fitOLMSim$results
+```
+The reduction in RMSE and improvement in R-squared indicate that the removal of the multicollinear variables improved the predictive accuracy and overall model fit.
+
+
+One more fancy visualization with `ggplot` and some residuals.  Not super useful but it was the first I put together and it looks pretty.
+
+```{r residualViz}
+housingData$Predicted <- predict(fit)
+housingData$logSalePrice <- log(housingData$SalePrice)
+ggplot(housingData, aes(x = YearBuilt, y = logSalePrice, color = Exterior1st)) +
+  geom_segment(aes(xend = YearBuilt, yend = Predicted), alpha = .2) +
+  geom_point()+
+  geom_point(aes(y = Predicted), shape = 1)+
+  facet_wrap(Neighborhood~.) 
+  
+```
+1.b.
+
+```{r}
+model.pls <- pls::plsr(log(SalePrice) ~ .-logSalePrice - Predicted, 16, data = housingData, #method = "oscorespls", 
+                       validation = "CV")
+summary(model.pls)
+```
+```{r}
+model.pls$validation$PRESS
+```
+
+```{r}
+plot(model.pls)
+
+plot(model.pls, ncomp = 1, asp = 1, line = TRUE)
+plot(model.pls, ncomp = 2, asp = 1, line = TRUE)
+plot(model.pls, ncomp = 3, asp = 1, line = TRUE)
+plot(model.pls, ncomp = 4, asp = 1, line = TRUE)
+plot(model.pls, ncomp = 16, asp = 1, line = TRUE)
+```
+
+```{r}
+plot(model.pls, plottype = "scores", comps = 1:4)
+```
+
+Based on the improvement in fit from 1 to 16 components and to avoid overfitting, 4 components seem to offer a good balance between predictive accuracy and model simplicity.
+```{r updated}
+validationplot(model.pls, val.type = "RMSEP")
+rmsep_4comps <- RMSEP(model.pls, ncomp = 4)$val[2]
+cat("Cross-validated RMSE for 4 components:", rmsep_4comps, "\n")
+```
+
+Based on the RMSEP plot and the cross-validated RMSE value, 4 components seem optimal for our PLS model. Adding more components yields diminishing returns in terms of RMSE improvement. The RMSE for the model with 4 components is 0.3633341, which provides a reasonable estimate of the model's prediction error on unseen data.
+
+1.c.
+
+We kept having issues getting `caret` to work so decided to look at the basic package that `caret` was using.  Quickly we recognized that the `lars` package requires only numerical data.  Once we saw that, we built a lasso model!
+```{r}
+x<- as.matrix(housingNumeric)
+lars(x,housingData$logSalePrice,"lasso")
+
+```
+Next we want to tune the parameter to the best possible.
+
+```{r}
+
+model <- caret::train(log(SalePrice) ~ .,
+               data = housingNumeric,
+               method = "lasso",
+              # scale = TRUE,
+               #trControl = fitControl#,
+               tuneLength = 10
+               )
+
+model
+```
+
+We see that 0.9 produced the best value, but let's keep tuning and see if we can do better.  I'll apply a grid too.
+
+```{r}
+lassoGrid <- expand.grid(fraction=seq(0.8,0.99,length=100))
+
+fitLasso <- train(log(SalePrice) ~ .,
+            data = housingNumeric,
+             method="lasso",
+             trControl=fitControl,
+             tuneGrid=lassoGrid)
+
+plot(fitLasso)
+
+fitLasso
+```
+```{r}
+fitLasso$bestTune
+```
+The RMSE for the model we choose is 0.1084523.
+
+```{r updated}
+# Extract the coefficients at the optimal fraction using predict
+coefficients <- predict(fitLasso$finalModel, 
+                        s = fitLasso$bestTune$fraction, 
+                        type = "coefficients", 
+                        mode = "fraction")$coefficients
+
+# Display the coefficients
+print(coefficients)
+
+
+```
+
+```{r}
+varImp(fitLasso, scale = FALSE)
+```
+
+1.d.
+
+Here is the elasticNet.  I played with the parameter grid for a bit too long.
+```{r}
+enetGrid <- expand.grid(lambda=seq(0,0.02,length=10),
+                        fraction=seq(.85,.90,length=10))
+
+fitEnet <- train(log(SalePrice) ~ .,
+            data = housingNumeric,
+             method="enet",
+             trControl=fitControl,
+             tuneGrid=enetGrid)
+
+plot(fitEnet, plotType="level")
+
+fitEnet
+
+# Best tuning parameters
+best_enet_tune <- fitEnet$bestTune
+print(best_enet_tune)
+
+# Best results
+best_enet <- fitEnet$results[which.min(fitEnet$results$RMSE), ]
+best_enet_RMSE <- best_enet$RMSE
+best_enet_R2 <- best_enet$Rsquared
+```
+
+Again, lots of tuning but a nice value for the ridge regression and it's $\ell^2$ penalty.
+```{r}
+ridgeGrid <- expand.grid(lambda=seq(0.0025,0.015,length=10))
+
+fitRidge <- train(log(SalePrice) ~ .,
+            data = housingNumeric,
+             method="ridge",
+             trControl=fitControl,
+             tuneGrid=ridgeGrid)
+
+plot(fitRidge)
+
+fitRidge
+
+# Best tuning parameters
+best_ridge_tune <- fitRidge$bestTune
+print(best_ridge_tune)
+
+# Best results
+best_ridge <- fitRidge$results[which.min(fitRidge$results$RMSE), ]
+best_ridge_RMSE <- best_ridge$RMSE
+best_ridge_R2 <- best_ridge$Rsquared
+```
+
+We want to try the reduction technique with a full linear regression that includes limited two way interactions.
+```{r}
+# Suppose we have identified key variables for interactions
+key_vars <- c("OverallQual", "GrLivArea", "GarageCars", "TotalBsmtSF")
+
+# Create a formula with limited interactions
+interaction_formula <- as.formula(paste("log(SalePrice) ~ . + (", paste(key_vars, collapse = "+"), ")^2"))
+
+# Fit the model
+fitOLMwLimited <- lm(interaction_formula, data = housingNumeric)
+
+# Perform stepwise selection
+OLMSim2Way <- stepAIC(fitOLMwLimited, direction = "both")
+
+```
+
+Now that we have found this linear fit, we run a 5 fold cross validation to examine the 
+
+```{r}
+
+
+fitOLMSim2Way <- train(OLMSim2Way$call$formula,
+             data=housingData,
+             method="lm",
+             trControl=fitControl)
+
+
+fitOLMSim2Way$results
+
+# Results
+best_ols2way_RMSE <- fitOLMSim2Way$results$RMSE
+best_ols2way_R2 <- fitOLMSim2Way$results$Rsquared
+```
+```{r}
+summary(fitOLMSim2Way)
+```
+
+```{r}
+library(earth)
+
+marsFit <- earth(log(SalePrice) ~ ., data = housingNumeric)
+
+summary(marsFit, style="pmax")
+```
+```{r}
+earthGrid <- expand.grid(nprune=1:20,degree = 1:10)
+fitMARS <- train(log(SalePrice) ~ .,
+                 data = housingNumeric,
+                 method = "earth",
+                 trControl = fitControl,
+                 tuneGrid = earthGrid)
+# Best tuning parameters
+best_mars_tune <- fitMARS$bestTune
+print(best_mars_tune)
+
+# Best results
+best_mars <- fitMARS$results[which.min(fitMARS$results$RMSE), ]
+best_mars_RMSE <- best_mars$RMSE
+best_mars_R2 <- best_mars$Rsquared
+```
+
+```{r table }
+# OLS (from fitOLM)
+best_ols_RMSE <- fitOLM$results$RMSE
+best_ols_R2 <- fitOLM$results$Rsquared
+
+# OLS Simplified (from fitOLMSim)
+best_olssim_RMSE <- fitOLMSim$results$RMSE
+best_olssim_R2 <- fitOLMSim$results$Rsquared
+
+# Create the data frame
+results_table <- data.frame(
+  Model = c("OLS", "OLS Simplified", "OLS Two-Way Interactions",
+            "Ridge Regression", "Elastic Net", "MARS"),
+  Notes = c("lm", "lm with stepwise selection", "lm with interactions",
+            "ridge", "elastic net", "earth"),
+  Hyperparameters = c(
+    "N/A",
+    "N/A",
+    "N/A",
+    paste("lambda =", round(best_ridge_tune$lambda, 5)),
+    paste("lambda =", round(best_enet_tune$lambda, 5), ", fraction =",
+          round(best_enet_tune$fraction, 4)),
+    paste("nprune =", best_mars_tune$nprune, ", 
+          degree =", best_mars_tune$degree)
+  ),
+  CVRMSE = round(c(best_ols_RMSE, best_olssim_RMSE, best_ols2way_RMSE,
+                   best_ridge_RMSE, best_enet_RMSE, best_mars_RMSE), 4),
+  CV_R2 = round(c(best_ols_R2, best_olssim_R2, best_ols2way_R2, 
+                  best_ridge_R2, best_enet_R2, best_mars_R2), 4)
+)
+
+
+library(knitr)
+kable(results_table, format = "markdown")
+```
+```{r}
+summary(fitOLM)$r.squared
+```
