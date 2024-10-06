@@ -271,9 +271,14 @@ plot(fitLasso)
 fitLasso
 ```
 ```{r}
-fitLasso$bestTune
+fitLasso$bestTune$fraction
+
+# Best results
+best_lasso <- fitLasso$results[which.min(fitLasso$results$RMSE), ]
+best_lasso_RMSE <- best_lasso$RMSE
+best_lasso_R2 <- best_lasso$Rsquared
 ```
-The RMSE for the model we choose is 0.1084523.
+
 
 ```{r updated3}
 # Extract the coefficients at the optimal fraction using predict
@@ -381,15 +386,15 @@ summary(fitOLMSim2Way)
 ```
 
 Lastly we attempt the MARS method to fit linear splines on the data.
-```{r}
-library(earth)
+```{r earth}
+
 
 marsFit <- earth(log(SalePrice) ~ ., data = housingNumeric)
 
 summary(marsFit, style="pmax")
 ```
 ```{r}
-earthGrid <- expand.grid(nprune=1:20,degree = 1:10)
+earthGrid <- expand.grid(nprune=10:20,degree = 1:5)
 fitMARS <- train(log(SalePrice) ~ .,
                  data = housingNumeric,
                  method = "earth",
@@ -415,30 +420,33 @@ best_ols_R2 <- fitOLM$results$Rsquared
 best_olssim_RMSE <- fitOLMSim$results$RMSE
 best_olssim_R2 <- fitOLMSim$results$Rsquared
 
+
+
 # Create the data frame
 results_table <- data.frame(
-  Model = c("OLS", "OLS Simplified", "OLS Two-Way Interactions",
+  Model = c("OLS", "OLS Simplified", "OLS Two-Way Interactions", "Lasso",
             "Ridge Regression", "Elastic Net", "MARS"),
-  Notes = c("lm", "lm with stepwise selection", "lm with interactions",
+  Notes = c("lm", "lm with stepwise selection", "lm with interactions","lars",
             "ridge", "elastic net", "earth"),
   Hyperparameters = c(
     "N/A",
     "N/A",
     "N/A",
+    paste("fraction =", round(fitLasso$bestTune$fraction, 5)),
     paste("lambda =", round(best_ridge_tune$lambda, 5)),
-    paste("lambda =", round(best_enet_tune$lambda, 5), ", fraction =",
-          round(best_enet_tune$fraction, 4)),
-    paste("nprune =", best_mars_tune$nprune, ", 
-          degree =", best_mars_tune$degree)
+    paste("lambda =", round(best_enet_tune$lambda, 5), 
+          ", fraction =", round(best_enet_tune$fraction, 4)),
+    paste("nprune =", best_mars_tune$nprune, 
+          ", degree =", best_mars_tune$degree)
   ),
-  CVRMSE = round(c(best_ols_RMSE, best_olssim_RMSE, best_ols2way_RMSE,
+  CVRMSE = round(c(best_ols_RMSE, best_olssim_RMSE, best_ols2way_RMSE, best_lasso_RMSE,
                    best_ridge_RMSE, best_enet_RMSE, best_mars_RMSE), 4),
-  CV_R2 = round(c(best_ols_R2, best_olssim_R2, best_ols2way_R2, 
+  CV_R2 = round(c(best_ols_R2, best_olssim_R2, best_ols2way_R2, best_lasso_R2,
                   best_ridge_R2, best_enet_R2, best_mars_R2), 4)
 )
 
 
-library(knitr)
+
 kable(results_table, format = "markdown")
 ```
 
