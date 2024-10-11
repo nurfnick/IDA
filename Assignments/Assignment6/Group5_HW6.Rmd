@@ -1,0 +1,193 @@
+---
+title: "Assignment 6 Kaggle Competition"
+author: "Nicholas Jacob and Yechang Qi"
+date: "2024-09-05"
+output: pdf_document
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+knitr::opts_chunk$set(include = FALSE) #this will make none of the code appear unless we ask it to.
+library(ggplot2)
+#library(corrplot)
+#library(ggfortify)
+library(MASS)
+library(caret)
+library(magrittr)
+library(dplyr)
+#library(HSAUR2)
+#library(outliers)
+#library(ggbiplot)
+#library(GGally)
+#library(gridExtra)
+#library(mice)
+library(forcats)
+library(knitr)
+library(car)
+library(pls)
+library(lars)
+```
+# Preparation and Modeling
+
+```{r}
+train = read.csv("Train.csv")
+glimpse(train)
+```
+```{r}
+train <- train %>% 
+  group_by(custId) %>%
+  mutate(totalRevenue = sum(revenue)) %>%
+  mutate(targetRevenue = log(totalRevenue +1)) %>%
+  ungroup()
+
+glimpse(train)
+```
+```{r}
+trainNumeric <- train %>% 
+  dplyr::select(where(is.numeric))
+
+```
+
+```{r}
+trainFactor <- train %>% 
+  dplyr::select(where(is.character))%>% ##|where(is.logical) )%>%
+  mutate_all(na_if,"")%>%
+  mutate_all(factor)
+  #mutate_all(fct_na_value_to_level) 
+```
+
+
+
+```{r}
+glimpse(trainFactor)
+```
+```{r}
+trainFactor$adwordsClickInfo.isVideoAd
+```
+```{r}
+Q1<-function(x,na.rm=TRUE) {
+quantile(x,na.rm=na.rm)[2]
+}
+Q3<-function(x,na.rm=TRUE) {
+quantile(x,na.rm=na.rm)[4]
+}
+```
+
+
+```{r}
+myNumericSummary <- function(x){
+  c(length(x), n_distinct(x), sum(is.na(x)), mean(x, na.rm=TRUE),
+  min(x,na.rm=TRUE), Q1(x,na.rm=TRUE), median(x,na.rm=TRUE), Q3(x,na.rm=TRUE),
+  max(x,na.rm=TRUE), sd(x,na.rm=TRUE))
+}
+```
+
+
+```{r}
+numericSummary <- trainNumeric %>%
+  summarise_all(myNumericSummary) #Applying the custom myNumericSummary function to all variables in the dataset. 
+
+glimpse(numericSummary)
+```
+
+```{r}
+numericSummary <-cbind(stat=c("n","unique","missing","mean","min","Q1","median",
+                              "Q3","max","sd"),numericSummary)
+```
+
+```{r}
+numericSummaryFinal <- numericSummary %>%
+  tidyr::pivot_longer("sessionId":"targetRevenue", names_to = "variable", values_to = "value") %>%
+  tidyr::pivot_wider(names_from = stat, values_from = value) %>%#Pivoting the numeric summary table to make it longer and then wider for readability, 
+  dplyr::mutate(missing_pct = 100*missing/n,
+         unique_pct = 100*unique/n) %>%
+  dplyr::select(variable, n, missing, missing_pct, unique, unique_pct, everything())
+#Adding percentage calculations for missing and unique values. 
+
+options(digits=3)#limit the number of digits in the table
+options(scipen=99)
+```
+
+```{r, include = TRUE}
+numericSummaryFinal %>% kable()#display table nicely when knitted
+```
+
+```{r}
+hist(train$targetRevenue, breaks = seq(0,10,1))
+```
+```{r}
+getmodes <- function(v,type=1) {
+tbl <- table(v)
+m1<-which.max(tbl)
+if (type==1) {
+return (names(m1)) #1st mode
+}
+else if (type==2) {
+return (if(length(names(which.max(tbl[-m1])))==0)
+{"NA"}
+else {names(which.max(tbl[-m1]))}
+                 ) #2nd mode
+}
+else if (type==-1) {
+return (names(which.min(tbl))) #least common mode
+}
+else {
+stop("Invalid type selected")
+}
+}
+getmodesCnt <- function(v,type=1) {
+tbl <- table(v)
+m1<-which.max(tbl)
+if (type==1) {
+return (max(tbl)) #1st mode freq
+}
+else if (type==2) {
+return (max(tbl[-m1])) #2nd mode freq
+}
+else if (type==-1) {
+return (min(tbl)) #least common freq
+}
+else {
+stop("Invalid type selected")
+}
+}
+```
+
+```{r}
+myCategoricalSummary <- function(x){
+  c(length(x),sum(is.na(x)), n_distinct(x),
+  getmodes(x,1),getmodesCnt(x,1),getmodes(x,2),getmodesCnt(x,2),getmodes(x,-1),getmodesCnt(x,-1))
+}
+
+```
+```{r}
+myCategoricalSummary(trainFactor$adwordsClickInfo.adNetworkType)
+```
+```{r}
+factorSummary <- trainFactor %>%
+  summarise_all(myCategoricalSummary)
+
+factorSummary<-cbind(stat=c("n","missing","unique",
+                             "1st mode", "first_mode_freq","2nd mode",
+                            "second_mode_freq","least common","least common freq"),
+                     factorSummary) #add titles becarefule to omit spaces for ones we need again.
+glimpse(factorSummary)
+```
+
+```{r}
+factorSummaryFinal <- factorSummary %>%
+  tidyr::pivot_longer("date":"adwordsClickInfo.adNetworkType", names_to = "variable", values_to = "value") %>%
+  tidyr::pivot_wider(names_from = stat, values_from = value) %>%
+  dplyr::mutate(missing_pct = 100*as.numeric(missing)/as.numeric(n),#compute missing_pct
+         unique_pct = 100*as.numeric(unique)/as.numeric(n), #unique percent
+         freqRatio = as.numeric(first_mode_freq)/as.numeric(second_mode_freq)) %>% #freqRatio as defined in assignment
+  dplyr::select(variable, n, missing, missing_pct, unique, unique_pct,freqRatio, everything())
+
+options(digits=3)
+options(scipen=99)
+```
+
+```{r, include=TRUE}
+factorSummaryFinal %>% kable() #display nicely
+```
