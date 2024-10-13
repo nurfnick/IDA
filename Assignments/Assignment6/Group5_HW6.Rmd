@@ -38,8 +38,8 @@ glimpse(train)
 ```{r}
 train <- train %>% 
   group_by(custId) %>%
-  mutate(totalRevenue = sum(revenue)) %>%
-  mutate(targetRevenue = log(totalRevenue +1)) %>%
+  #mutate(totalRevenue = sum(revenue)) %>%
+  mutate(targetRevenue = log(sum(revenue) +1)) %>%
   ungroup()
 
 glimpse(train)
@@ -192,7 +192,35 @@ options(scipen=99)
 ```{r, include=TRUE}
 factorSummaryFinal %>% kable() #display nicely
 ```
+## Quick and Dirty Clean
+```{r}
+trainFactor <- train %>% 
+  dplyr::select(where(is.character))%>% ##|where(is.logical) )%>%
+  mutate_all(na_if,"")%>%
+  mutate_all(factor)%>%
+  mutate_all(fct_na_value_to_level) 
+trainNumeric <- train %>% 
+  dplyr::select(where(is.numeric))%>%
+  replace(is.na(.),0)
 
+train <- cbind(trainNumeric,trainFactor)
+
+trainNumeric$nonZero <- as.factor(train$targetRevenue>0)
+```
+```{r}
+names(trainNumeric)
+```
+## Identifying The Zeros
+```{r}
+trainControl <- trainControl(method="repeatedcv", number=5, repeats=1)
+metric <- "Accuracy"
+
+fit.knn <- train(nonZero~.,
+                 data=trainNumeric, method="knn",
+                 metric=metric ,trControl=trainControl)
+knn.k1 <- fit.knn$bestTune # keep this Initial k for testing with knn() function in next section
+print(fit.knn)
+```
 ## Creating an Output For Competition
 ```{r}
 test = read.csv('Test.csv')
