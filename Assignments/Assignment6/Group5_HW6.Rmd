@@ -30,6 +30,7 @@ library(lars)
 ```
 # Preparation and Modeling
 
+First we examined the missing data. Recycling the coding from earlier in the semester, we get the following reports on data that is missing.
 ```{r}
 train = read.csv("Train.csv")
 glimpse(train)
