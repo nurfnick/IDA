@@ -192,3 +192,16 @@ options(scipen=99)
 ```{r, include=TRUE}
 factorSummaryFinal %>% kable() #display nicely
 ```
+
+## Creating an Output For Competition
+```{r}
+test = read.csv('Test.csv')
+
+cids = unique(test$custId)
+zeros = rep(0,length(cids))#I just made them all zero for a simplistic prediction
+```
+
+```{r}
+output <- cbind(custId = cids, predRevenue = zeros)
+write.csv(output, "sillyResult.csv",row.names = FALSE)
+```
