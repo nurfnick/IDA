@@ -212,15 +212,21 @@ names(trainNumeric)
 ```
 ## Identifying The Zeros
 ```{r}
-trainControl <- trainControl(method="repeatedcv", number=5, repeats=1)
+trainControl <- trainControl(method="cv", number=5)
 metric <- "Accuracy"
+grid <- expand.grid(.k=seq(1,20,by=1))
 
-fit.knn <- train(nonZero~.,
-                 data=trainNumeric, method="knn",
-                 metric=metric ,trControl=trainControl)
+fit.knn <- train(nonZero~.-targetRevenue - revenue,#
+                 data=trainNumeric, method="lda",
+                 metric=metric ,
+                 trControl=trainControl#,
+                 #tuneGrid = grid
+                 )
 knn.k1 <- fit.knn$bestTune # keep this Initial k for testing with knn() function in next section
 print(fit.knn)
 ```
+Once the zero's have been identified, not need to predict a value for those.  Can build the regression on just the values that are non-zero.
+
 ## Creating an Output For Competition
 ```{r}
 test = read.csv('Test.csv')
