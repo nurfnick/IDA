@@ -205,7 +205,7 @@ trainNumeric <- train %>%
 
 train <- cbind(trainNumeric,trainFactor)
 
-trainNumeric$nonZero <- as.factor(train$targetRevenue>0)
+trainNumeric$nonZero <- as.factor(train$revenue>0)
 ```
 ```{r}
 names(trainNumeric)
@@ -226,6 +226,14 @@ knn.k1 <- fit.knn$bestTune # keep this Initial k for testing with knn() function
 print(fit.knn)
 ```
 Once the zero's have been identified, not need to predict a value for those.  Can build the regression on just the values that are non-zero.
+
+```{r}
+ldafit <- lda(nonZero~.-targetRevenue - revenue,#
+                 data=trainNumeric)
+
+predNonZero <- predict(ldafit,trainNumeric)
+```
+
 
 ## Creating an Output For Competition
 ```{r}
