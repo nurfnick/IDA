@@ -233,16 +233,50 @@ ldafit <- lda(nonZero~.-targetRevenue - revenue,#
 
 predNonZero <- predict(ldafit,trainNumeric)
 ```
+```{r}
+lmod <- lm(revenue ~ . - targetRevenue - nonZero, 
+           data =trainNumeric[as.logical(predNonZero$class),])
 
+plot(lmod)
+```
+```{r}
+names(trainNumeric)
+```
+
+```{r}
+predVal = predict(lmod,trainNumeric)
+
+trainNumeric$predVal <- replace(predVal,!as.logical(predNonZero$class)|predVal <0,0)
+
+trainNumeric <- trainNumeric %>%
+  group_by(custId)%>%
+  mutate(targetRevenuePred = log(sum(predVal)+1))%>%
+  ungroup()
+```
+```{r}
+any(is.na(trainNumeric$predVal))
+```
 
 ## Creating an Output For Competition
-```{r}
+```{r zeros}
 test = read.csv('Test.csv')
 
 cids = unique(test$custId)
 zeros = rep(0,length(cids))#I just made them all zero for a simplistic prediction
 ```
+```{r simple lm with lda}
+testNumeric <- test %>% 
+  dplyr::select(where(is.numeric))%>%
+  replace(is.na(.),0)
+predNonZero <- predict(ldafit,testNumeric)
+predVal <- predict(lmod,testNumeric)
 
+testNumeric$predVal <- replace(predVal,!as.logical(predNonZero$class)|predVal <0,0)
+
+testNumeric <- testNumeric %>%
+  group_by(custId)%>%
+  mutate(targetRevenuePred = log(sum(predVal)+1))
+```
 ```{r}
 output <- cbind(custId = cids, predRevenue = zeros)
 write.csv(output, "sillyResult.csv",row.names = FALSE)
