@@ -117,6 +117,10 @@ numericSummaryFinal %>% kable()#display table nicely when knitted
 ```{r}
 hist(train$targetRevenue, breaks = seq(0,10,1))
 ```
+
+```{r, include=TRUE}
+hist(train[train$targetRevenue>0,]$targetRevenue, breaks = seq(0,10,1))
+```
 ```{r}
 getmodes <- function(v,type=1) {
 tbl <- table(v)
@@ -228,14 +232,19 @@ print(fit.knn)
 Once the zero's have been identified, not need to predict a value for those.  Can build the regression on just the values that are non-zero.
 
 ```{r}
-ldafit <- lda(nonZero~.-targetRevenue - revenue,#
-                 data=trainNumeric)
+ldafit <- lda(nonZero~.,#
+                 data=trainNumeric %>% 
+                      select(-c("targetRevenue","revenue"))
+              )
 
 predNonZero <- predict(ldafit,trainNumeric)
 ```
 ```{r}
-lmod <- lm(revenue ~ . - targetRevenue - nonZero, 
-           data =trainNumeric[as.logical(predNonZero$class),])
+lmod <- lm(revenue ~ ., 
+           data =trainNumeric%>%
+             select(-c("targetRevenue","nonZero"))%>%
+             filter(as.logical(predNonZero$class))
+          )
 
 plot(lmod)
 ```
@@ -277,7 +286,15 @@ testNumeric <- testNumeric %>%
   group_by(custId)%>%
   mutate(targetRevenuePred = log(sum(predVal)+1))
 ```
+
 ```{r}
-output <- cbind(custId = cids, predRevenue = zeros)
-write.csv(output, "sillyResult.csv",row.names = FALSE)
+slice <- testNumeric %>%
+  select(targetRevenuePred)%>%
+  summarise(n = mean(targetRevenuePred))
+
+slice
+```
+```{r}
+output <- cbind(custId = slice$custId, predRevenue = slice$n)
+write.csv(output, "nicksResult.csv",row.names = FALSE)
 ```
