@@ -210,6 +210,7 @@ trainNumeric <- train %>%
 train <- cbind(trainNumeric,trainFactor)
 
 trainNumeric$nonZero <- as.factor(train$revenue>0)
+train$nonZero <- as.factor(train$revenue>0)
 ```
 ```{r}
 names(trainNumeric)
@@ -238,6 +239,18 @@ ldafit <- lda(nonZero~.,#
               )
 
 predNonZero <- predict(ldafit,trainNumeric)
+```
+```{r}
+names(train)
+```
+```{r logistic Model}
+glmfit <- glm(nonZero~.,
+              data = train %>%
+                select(-c("targetRevenue","revenue","adContent","adwordsClickInfo.page",
+                        "adwordsClickInfo.slot","adwordsClickInfo.gclId",
+                        "adwordsClickInfo.adNetworkType","adwordsClickInfo.slot")),#I need less variables to be computed this is maxing my working memory
+              family="binomial"
+              )
 ```
 ```{r}
 lmod <- lm(revenue ~ ., 
