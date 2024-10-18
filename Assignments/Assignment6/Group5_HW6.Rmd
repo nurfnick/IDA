@@ -27,6 +27,7 @@ library(knitr)
 library(car)
 library(pls)
 library(lars)
+library(lubridate)
 ```
 # Preparation and Modeling
 
@@ -196,6 +197,16 @@ options(scipen=99)
 ```{r, include=TRUE}
 factorSummaryFinal %>% kable() #display nicely
 ```
+## Cleaning Dates
+
+I want to add the month as a factor rather than just the date.  I find this is a better indicator of sales.  Note I made it a factor, NOT a quantitative variable.
+```{r}
+trainFactor <- trainFactor %>%
+  mutate(month = as.factor(month(ymd(date))))
+```
+
+
+
 ## Quick and Dirty Clean
 ```{r}
 trainFactor <- train %>% 
@@ -248,9 +259,18 @@ glmfit <- glm(nonZero~.,
               data = train %>%
                 select(-c("targetRevenue","revenue","adContent","adwordsClickInfo.page",
                         "adwordsClickInfo.slot","adwordsClickInfo.gclId",
-                        "adwordsClickInfo.adNetworkType","adwordsClickInfo.slot")),#I need less variables to be computed this is maxing my working memory
+                        "adwordsClickInfo.adNetworkType","adwordsClickInfo.slot",
+                        "country", "region","metro","city","networkDomain","topLevelDomain",
+                        "medium","campaign","keyword","referralPath","sessionId","custId",
+                        "date","source","channelGrouping","browser","operatingSystem"
+                        )
+                       ),#I need less variables to be computed this is maxing my working memory
               family="binomial"
               )
+```
+```{r}
+#plot(glmfit)
+summary(glmfit)
 ```
 ```{r}
 lmod <- lm(revenue ~ ., 
