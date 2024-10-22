@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.14159265-2.6-1.40.18 (TeX Live 2017/Debian) (preloaded format=pdflatex 2023.5.31)  22 OCT 2024 08:27
+This is pdfTeX, Version 3.14159265-2.6-1.40.18 (TeX Live 2017/Debian) (preloaded format=pdflatex 2023.5.31)  22 OCT 2024 08:30
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -978,20 +978,23 @@ File: t1lmtt.fd 2009/10/30 v1.6 Font defs for Latin Modern
 LaTeX Font Info:    Font shape `T1/lmtt/bx/n' in size <10> not available
 (Font)              Font shape `T1/lmtt/b/n' tried instead on input line 125.
 
-! LaTeX Error: File `"https://github.com/nurfnick/IDA/raw/refs/heads/main/Assig
-nments/Project/snoImage"' not found.
+LaTeX Warning: File `"https://github.com/nurfnick/IDA/raw/refs/heads/main/Assig
+nments/Project/snoImage.jpg"' not found on input line 163.
+
+
+! LaTeX Error: Unknown graphics extension: .jpg".
 
 See the LaTeX manual or LaTeX Companion for explanation.
 Type  H <return>  for immediate help.
  ...                                              
                                                   
-l.163 ...heads/main/Assignments/Project/snoImage"}
+l.163 ...s/main/Assignments/Project/snoImage.jpg"}
                                                    
 Here is how much of TeX's memory you used:
- 13293 strings out of 492982
- 191515 string characters out of 6134896
+ 13282 strings out of 492982
+ 191409 string characters out of 6134896
  307056 words of memory out of 5000000
- 16648 multiletter control sequences out of 15000+600000
+ 16649 multiletter control sequences out of 15000+600000
  32985 words of font info for 46 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
  34i,6n,38p,319b,329s stack positions out of 5000i,500n,10000p,200000b,80000s
