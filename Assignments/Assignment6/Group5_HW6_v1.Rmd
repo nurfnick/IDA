@@ -1,0 +1,554 @@
+---
+title: "Assignment 6 Kaggle Competition"
+author: "Nicholas Jacob, Yechang Qi, Zayne Mclaughlin"
+date: "2024-09-05"
+output: pdf_document
+---
+```{r setupinstall, include = FALSE}
+# List of required packages
+packages <- c("ggplot2", "MASS", "caret", "magrittr", "dplyr", 
+              "forcats", "knitr", "car", "pls", "lars", "lubridate","reshape2","fastDummies","glmnet")
+
+# Function to check and install packages
+install_if_missing <- function(p) {
+  if (!requireNamespace(p, quietly = TRUE)) {
+    install.packages(p, dependencies = TRUE)
+  }
+}
+# Install all packages
+invisible(lapply(packages, install_if_missing))
+```
+
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+library(ggplot2)
+library(reshape2)
+library(scales)
+library(fastDummies)
+library(kableExtra)
+library(MASS)
+library(caret)
+library(magrittr)
+library(dplyr)
+library(glmnet)
+#library(outliers)
+#library(ggbiplot)
+#library(GGally)
+#library(gridExtra)
+library(tidyr)
+library(forcats)
+library(knitr)
+library(car)
+library(pls)
+library(lars)
+library(lubridate)
+```
+# Preparation and Modeling
+# (a) i. Data understanding
+
+Import Data:
+```{r }
+train = read.csv("Train.csv")
+```
+Generation of objective variable:
+```{r}
+train <- train %>% 
+  group_by(custId) %>%
+  #mutate(totalRevenue = sum(revenue)) %>%
+  mutate(targetRevenue = log(sum(revenue) +1)) %>%
+  ungroup()
+```
+Numeric variables:
+```{r}
+trainNumeric <- train %>% 
+  dplyr::select(where(is.numeric))
+glimpse(trainNumeric)
+```
+Character variables:
+```{r}
+trainFactor <- train %>% 
+  dplyr::select(where(is.character))%>% ##|where(is.logical) )%>%
+  mutate_all(na_if,"")%>%
+  mutate_all(factor)
+  #mutate_all(fct_na_value_to_level) 
+glimpse(trainFactor)
+```
+
+```{r}
+Q1<-function(x,na.rm=TRUE) {
+quantile(x,na.rm=na.rm)[2]
+}
+Q3<-function(x,na.rm=TRUE) {
+quantile(x,na.rm=na.rm)[4]
+}
+```
+
+
+```{r}
+myNumericSummary <- function(x){
+  c(length(x), n_distinct(x), sum(is.na(x)), mean(x, na.rm=TRUE),
+  min(x,na.rm=TRUE), Q1(x,na.rm=TRUE), median(x,na.rm=TRUE), Q3(x,na.rm=TRUE),
+  max(x,na.rm=TRUE), sd(x,na.rm=TRUE))
+}
+```
+
+
+```{r}
+
+# Summary function (assuming you have defined `myNumericSummary` elsewhere in your code)
+numericSummary <- trainNumeric %>%
+  summarise_all(myNumericSummary) %>%
+  # Adding descriptive statistics to the numeric summary table
+  cbind(stat = c("n", "unique", "missing", "mean", "min", "Q1", "median", "Q3", "max",
+                 "sd")) %>%
+  # Pivoting the numeric summary table for readability and adding percentage calculations
+  tidyr::pivot_longer(cols = "sessionId":"targetRevenue", names_to = "variable", 
+                      values_to = "value") %>%
+  tidyr::pivot_wider(names_from = stat, values_from = value) %>%
+  dplyr::mutate(
+    missing_pct = 100 * missing / n,
+    unique_pct = 100 * unique / n
+  ) %>%
+  # Selecting and ordering columns
+  dplyr::select(variable, n, missing, missing_pct, unique, unique_pct, everything())
+
+# Limiting the number of digits in the table and using scientific notation
+options(digits = 2, scipen = 0)
+
+# Displaying the final table with larger row distance
+numericSummary %>%  
+  kable(digits = 2, format = "latex", booktabs = TRUE, 
+        caption = "Descriptive Summary of Numeric Variables") %>%
+  kable_styling(font_size = 12,latex_options = "scale_down") %>%
+  row_spec(0, bold = TRUE) %>% # Make header bold
+  row_spec(1:nrow(numericSummary), extra_latex_after = "\\addlinespace[0.5em]")
+```
+
+Table 1 provides a Descriptive Summary of Numeric Variables in the dataset. Some variables, like adwordsClickInfo.page, have a high percentage of missing data (97.42%).  The median revenue is 0, indicating that many customers may not generate revenue.
+
+\newpage
+```{r}
+# Function to get mode, 2nd mode, and least common mode
+getmodes <- function(v, type=1) {
+  tbl <- table(v)
+  if (type == 1) return(names(which.max(tbl)))  # 1st mode
+  if (type == -1) return(names(which.min(tbl)))  # Least common mode
+  if (type == 2 && length(tbl) > 1) {
+    m1 <- which.max(tbl)
+    return(names(which.max(tbl[-m1])))  # 2nd mode
+  }
+  return("NA")  # Default when no valid 2nd mode
+}
+
+# Function to get mode frequency, 2nd mode frequency
+getmodesCnt <- function(v, type=1) {
+  tbl <- table(v)
+  if (type == 1) return(max(tbl))  # 1st mode frequency
+  if (type == 2 && length(tbl) > 1) {
+    m1 <- which.max(tbl)
+    return(max(tbl[-m1]))  # 2nd mode frequency
+  }
+  return(NA)  # Default when no valid 2nd mode frequency
+}
+```
+
+```{r}
+# Define categorical summary function
+myCategoricalSummary <- function(x) {
+  c(
+    length(x),
+    sum(is.na(x)),
+    n_distinct(x),
+    getmodes(x, 1), getmodesCnt(x, 1),
+    getmodes(x, 2), getmodesCnt(x, 2)
+  )
+}
+
+# Apply the categorical summary function to all factors in trainFactor
+factorSummary <- trainFactor %>%
+  summarise_all(myCategoricalSummary)
+
+# Add column titles to the factorSummary table
+factorSummary <- cbind(
+  stat = c("n", "missing", "unique", "1st mode", "first_mode_freq",
+           "2nd mode", "second_mode_freq"),
+  factorSummary
+)
+
+# Reshape the data and calculate percentages for missing and unique values
+factorSummaryFinal <- factorSummary %>%
+  tidyr::pivot_longer(cols = "date":"adwordsClickInfo.adNetworkType", 
+                      names_to = "variable", values_to = "value") %>%
+  tidyr::pivot_wider(names_from = stat, values_from = value) %>%
+  dplyr::mutate(
+    missing_pct = 100 * as.numeric(missing) / as.numeric(n),  # Calculate missing percentage
+    unique_pct = 100 * as.numeric(unique) / as.numeric(n),  
+    # Calculate unique percentage
+    freqRatio = as.numeric(first_mode_freq) / as.numeric(second_mode_freq)  
+    # Frequency ratio
+  ) %>%
+  dplyr::select(variable, n, missing, missing_pct, unique, unique_pct, freqRatio, everything())
+
+# Exclude specific columns (variables) from the final table
+factorSummaryFinal <- factorSummaryFinal %>%
+  dplyr::filter(!variable %in% c("referralPath", "adContent", 
+                                 "adwordsClickInfo.page", 
+                                 "adwordsClickInfo.slot", 
+  "adwordsClickInfo.gclId","adwordsClickInfo.adNetworkType"))
+
+# Set display options for precision and formatting
+options(digits = 3, scipen = 99)
+
+# Display the final summary table with kable
+factorSummaryFinal %>% 
+  kable(digits = 2, format = "latex", booktabs = TRUE, 
+        caption = "Descriptive Summary of Categorical Variables") %>%
+  kable_styling(font_size = 4,latex_options = "scale_down") %>%
+  row_spec(0, bold = TRUE) %>%  # Make header bold
+  row_spec(1:nrow(factorSummaryFinal), extra_latex_after = "\\addlinespace[0.25em]") 
+
+```
+
+Table 2 provides a Descriptive Summary of Categorical Variables in the dataset. Some variables, like metro, have a high percentage of missing data (70.19%). For variables like "browser", Chrome is the most dominant category, followed by Safari. Similarly, for "deviceCategory", most users are using desktop.
+
+\newpage
+
+```{r customer-vs-totalrevenue-plot,fig.width = 6, fig.height = 3}
+# Group by custId and calculate the total target revenue per customer
+customer_revenue <- train %>%
+  group_by(custId) %>%
+  summarize(total_targetRevenue = sum(targetRevenue, na.rm = TRUE))  
+# Summing targetRevenue for each customer
+
+# Plot the total target revenue per customer using ggplot
+ggplot(customer_revenue, aes(x = custId, y = total_targetRevenue)) + 
+  geom_bar(stat = "identity", fill = "blue") + 
+  theme_minimal() +
+  labs(x = "Customer ID", 
+       y = "Total Target Revenue") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+The plot provides a snapshot of total revenue for each customer, without considering the timing of visits. This cross-sectional view helps to understand the overall spending behavior of different customers. By showing the total revenue per customer, this plot offers insight into each customer’s willingness or capacity to spend. Higher total revenue values indicate customers who are potentially more willing to spend or have a higher purchasing capacity.
+
+\newpage
+```{r visits-vs-revenue-plot, fig.width = 8, fig.height = 5}
+
+# Scatter plot of number of visits vs. total revenue
+ggplot(train, aes(x = visitNumber, y = targetRevenue)) + 
+  geom_point(alpha = 0.5, color = "darkred") + 
+  labs(title = "Target Revenue vs. Number of Visits", 
+       x = "Number of Visits", y = "Target Revenue") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+```
+This scatter plot illustrates the relationship between the number of visits and the total revenue for customers. Most customers have a small number of visits and generate relatively low total revenue.  The outliers—those who visit more frequently or generate higher revenue—could indeed be considered high net value customers. These customers contribute significantly more to the business in terms of revenue despite being a smaller group.
+
+\newpage
+
+```{r Pie, fig.width = 8, fig.height = 5}
+customer_revenue <- train %>%
+  group_by(custId) %>%
+  summarize(total_revenue = sum(revenue, na.rm = TRUE)) %>%
+  arrange(desc(total_revenue))  # Sort by revenue in descending order
+
+# Calculate cumulative revenue percentage
+customer_revenue <- customer_revenue %>%
+  mutate(cumulative_revenue = cumsum(total_revenue),
+         revenue_percentage = cumulative_revenue / sum(total_revenue) * 100)
+
+# Categorize customers into groups (top 10%, 20%, etc.)
+total_customers <- nrow(customer_revenue)
+customer_revenue <- customer_revenue %>%
+  mutate(percentile_group = ntile(row_number(), 100))  # Divide into 100 groups (deciles)
+
+# Summarize revenue contribution by group
+group_contribution <- customer_revenue %>%
+  group_by(percentile_group) %>%
+  summarize(group_total_revenue = sum(total_revenue),
+            group_percentage = group_total_revenue / sum(customer_revenue$total_revenue) * 100)
+group_contribution <- group_contribution %>%
+  arrange(desc(group_percentage)) %>%
+  mutate(group = ifelse(row_number() <= 5, paste("Group", row_number()), "Others")) %>%
+  group_by(group) %>%
+  summarize(group_total_revenue = sum(group_total_revenue),
+            group_percentage = sum(group_percentage))
+
+# Define the color palette for the top 5 groups and "Others"
+custom_colors <- c("#66C2A5", "#3288BD", "#ABDDA4", "#5E4FA2", "#41B6C4", "lightgray")  
+
+# Create the pie chart, showing labels only for the top 5 and "Others"
+ggplot(group_contribution, aes(x = "", y = group_percentage, fill = group)) +
+  geom_bar(stat = "identity", width = 1) +  # Bar chart for pie chart structure
+  coord_polar(theta = "y") +  # Polar coordinates to create the pie chart
+  geom_text(aes(label = paste0(round(group_percentage, 1), "%")),  # Label all groups
+            position = position_stack(vjust = 0.5), size = 3) + 
+  scale_fill_manual(values = custom_colors) +  # Apply custom colors
+  labs(title = "Customer Contribution by Percentile Group (Top 5 + Others)",
+       fill = "Group") +
+  theme_void() +  # Clean look
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    legend.key.size = unit(0.4, "cm"),  # Reduce the size of the legend keys
+    legend.text = element_text(size = 8)  # Reduce the text size in the legend
+    
+  )
+
+```
+
+This plot provides a clear understanding of how heavily the revenue relies on a few top customer groups, emphasizing the importance of focusing efforts on retaining and nurturing these high-value customers.
+
+\newpage
+```{r}
+# Remove rows with NA values from the numeric dataset
+train_numeric_NNA <- na.omit(trainNumeric)
+
+# Compute the correlation matrix
+cor_matrix <- cor(train_numeric_NNA)
+
+# Adjust margins for better plotting
+par(mar = c(5, 5, 5, 5)) 
+
+# Create the heatmap without clustering
+heatmap(cor_matrix, Colv = NA, Rowv = NA,
+        scale = "none")  # Don't scale the correlation values
+
+```
+
+The heatmap suggests that there are few strong correlations between the variables in the train dataset, meaning that most variables act fairly independently of each other.
+
+# (a) ii. Data preparation
+## Cleaning Datas
+
+```{r}
+trainFactor <- train %>% 
+  dplyr::select(where(is.character))%>% ##|where(is.logical) )%>%
+  mutate_all(na_if,"")%>%
+  mutate_all(factor)%>%
+  mutate_all(fct_na_value_to_level) 
+trainNumeric <- train %>% 
+  dplyr::select(where(is.numeric))%>%
+  replace(is.na(.),0)
+```
+Replacing missing values with zeros ensures that all features have valid values, allowing the model to learn from all the data without dropping rows or variables.
+
+
+```{r}
+train <- cbind(trainNumeric,trainFactor)
+
+trainNumeric$nonZero <- as.factor(train$revenue>0)
+train$nonZero <- as.factor(train$revenue>0)
+```
+
+Identifying customers with non-zero revenue is essential because it helps separate the customers who made purchases from those who did not. This separation allows us to handle the two groups differently in the modeling process. We will focus regression models only on non-zero revenue cases first. 
+
+```{r}
+
+trainFactor <- trainFactor %>%
+  mutate(month = as.factor(month(ymd(date))))
+```
+We want to add the month as a factor rather than just the date.  we find this is a better indicator of sales. Note we made it a factor, NOT a quantitative variable.
+
+We decided not to process the outliers in our model because they represent important and meaningful data points, such as high-revenue customers or significant transactions. These outliers capture real-world behavior that is critical for predicting total revenue and customer value.
+
+# (a) iii. Modeling
+## Model 1: 
+## Identifying The Zeros
+```{r}
+trainControl <- trainControl(method="cv", number=5)
+metric <- "Accuracy"
+grid <- expand.grid(.k=seq(1,20,by=1))
+
+fit.knn <- train(nonZero~.-targetRevenue - revenue,#
+                 data=trainNumeric, method="lda",
+                 metric=metric ,
+                 trControl=trainControl#,
+                 #tuneGrid = grid
+                 )
+knn.k1 <- fit.knn$bestTune # keep this Initial k for testing with knn() function in next section
+print(fit.knn)
+```
+Once the zero's have been identified, not need to predict a value for those.  Can build the regression on just the values that are non-zero.
+
+```{r}
+ldafit <- lda(nonZero~.,#
+                 data=trainNumeric %>% 
+                      select(-c("targetRevenue","revenue"))
+              )
+
+predNonZero <- predict(ldafit,trainNumeric)
+```
+```{r}
+names(train)
+```
+```{r logistic Model}
+glmfit <- glm(nonZero~.,
+              data = train %>%
+                select(-c("targetRevenue","revenue","adContent","adwordsClickInfo.page",
+                        "adwordsClickInfo.slot","adwordsClickInfo.gclId",
+                        "adwordsClickInfo.adNetworkType","adwordsClickInfo.slot",
+                        "country", "region","metro","city","networkDomain","topLevelDomain",
+                        "medium","campaign","keyword","referralPath","sessionId","custId",
+                        "date","source","channelGrouping","browser","operatingSystem"
+                        )
+                       ),#I need less variables to be computed this is maxing my working memory
+              family="binomial"
+              )
+```
+```{r}
+#plot(glmfit)
+summary(glmfit)
+```
+```{r}
+lmod <- lm(revenue ~ ., 
+           data =trainNumeric%>%
+             select(-c("targetRevenue","nonZero"))%>%
+             filter(as.logical(predNonZero$class))
+          )
+
+plot(lmod)
+```
+```{r}
+names(trainNumeric)
+```
+
+```{r}
+predVal = predict(lmod,trainNumeric)
+
+trainNumeric$predVal <- replace(predVal,!as.logical(predNonZero$class)|predVal <0,0)
+
+trainNumeric <- trainNumeric %>%
+  group_by(custId)%>%
+  mutate(targetRevenuePred = log(sum(predVal)+1))%>%
+  ungroup()
+```
+```{r}
+any(is.na(trainNumeric$predVal))
+```
+
+## Model 2: 
+```{r}
+# Separate numeric and factor data
+trainFactor <- train %>% dplyr::select(where(is.factor))
+trainNumeric <- train %>% dplyr::select(where(is.numeric))
+
+# Apply one-hot encoding to the categorical variables
+trainFactor_encoded <- fastDummies::dummy_cols(trainFactor,
+                                               remove_first_dummy = TRUE,
+                                               remove_selected_columns = TRUE)
+
+# Combine the encoded categorical data with the numeric data
+train_full <- cbind(trainNumeric, trainFactor_encoded)
+
+#PCA
+# Apply PCA to the scaled data
+pca_result <- prcomp(train_full, scale = TRUE)
+
+# View summary of the PCA results to see explained variance
+summary(pca_result)
+
+# Create a scree plot to visualize explained variance
+plot(pca_result, type = "l", main = "Scree Plot")
+
+# Working only with non-zero revenue data for LASSO
+trainNonZero <- train_full %>% filter(revenue > 0)
+
+# Prepare the predictor matrix (X) and the response vector (y)
+X <- as.matrix(trainNonZero %>% select(-targetRevenue))  # Exclude the target variable
+y <- trainNonZero$targetRevenue
+
+# Fit the LASSO model with cross-validation
+set.seed(2024)  
+lasso_model <- cv.glmnet(X, y, alpha = 1)  # alpha = 1 for LASSO (L1 penalty)
+
+# Print the best lambda (penalty parameter)
+print(lasso_model$lambda.min)
+
+# Plot the cross-validation results to visualize the best lambda
+plot(lasso_model)
+```
+
+
+
+## Summary of Model Performance
+
+
+\newpage 
+# (a) iv. Debrief
+
+
+
+\newpage 
+## (b) Creating an Output For Competition
+```{r zeros}
+test = read.csv('Test.csv')
+
+cids = unique(test$custId)
+zeros = rep(0,length(cids))#I just made them all zero for a simplistic prediction
+```
+```{r simple lm with lda}
+testNumeric <- test %>% 
+  dplyr::select(where(is.numeric))%>%
+  replace(is.na(.),0)
+predNonZero <- predict(ldafit,testNumeric)
+predVal <- predict(lmod,testNumeric)
+
+testNumeric$predVal <- replace(predVal,!as.logical(predNonZero$class)|predVal <0,0)
+
+testNumeric <- testNumeric %>%
+  group_by(custId)%>%
+  mutate(targetRevenuePred = log(sum(predVal)+1))
+```
+
+```{r}
+slice <- testNumeric %>%
+  select(targetRevenuePred)%>%
+  summarise(n = mean(targetRevenuePred))
+
+slice
+```
+```{r}
+output <- cbind(custId = slice$custId, predRevenue = slice$n)
+write.csv(output, "nicksResult.csv",row.names = FALSE)
+```
+
+```{r model2}
+test = read.csv('Test.csv')
+# Separate numeric and factor (categorical) data from test.csv
+testFactor <- test %>% 
+  dplyr::select(where(is.character))%>% ##|where(is.logical) )%>%
+  mutate_all(na_if,"")%>%
+  mutate_all(factor)
+testNumeric <- test %>% dplyr::select(where(is.numeric))
+
+# One-hot encode categorical variables in the test set
+testFactor_encoded <- fastDummies::dummy_cols(testFactor, remove_first_dummy = TRUE, remove_selected_columns = TRUE)
+
+# Combine the numeric and encoded categorical variables
+test_full <- cbind(testNumeric, testFactor_encoded)
+
+# Replace any missing numeric values with zeros (or handle missing data as needed)
+test_full <- test_full %>%
+  mutate(across(where(is.numeric), ~ replace_na(., 0)))  # Handle missing numeric values
+
+# Prepare the test predictor matrix
+X_test <- as.matrix(test_full)
+
+# Predict on the test data using the LASSO model
+predicted_revenue_test <- predict(lasso_model, s = lasso_model$lambda.min, newx = X_test)
+
+# Add the predicted revenue back to the test dataframe
+test_full$predicted_revenue <- as.numeric(predicted_revenue_test)
+
+# Assuming 'custId' is in the test set and you want to include it in the output
+output <- data.frame(custId = test$custId, predicted_revenue = test_full$predicted_revenue)
+
+# Save the output to a CSV file
+write.csv(output, "predicted_revenue.csv", row.names = FALSE)
+
+```
