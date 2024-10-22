@@ -28,15 +28,17 @@ library(car)
 library(pls)
 library(lars)
 ```
+![SnOasis Logo](snoImage.png)
+
 # Proposal
 
 Our team will analyze sales data from multiple snow cone stands in Ada Oklahoma.  The data is available on [GitHub](https://github.com/nurfnick/SnOasis/refs/heads/main/snoasisData.csv)
-```{r}
+```{r, include=FALSE}
 df = read.csv("https://github.com/nurfnick/SnOasis/raw/refs/heads/main/snoasisData.csv")
 tail(df)
 ```
-![SnOasis Logo]("https://github.com/nurfnick/IDA/raw/refs/heads/main/Assignments/Project/snoImage.jpg")
+
 
 We see that there are about 76000 entries in the dataset representing 37000 separate sales transactions.  This includes multiple locations and lots of point of sales data that was gathered for tax and reporting purposes.  
 
-We hope to examine the sales data with a eye towards labor and predicting the needs of workers in the snow cone stands.  Labor is by far the most expensive part of running the business and if we can predict sales volume by day, hour and location, we can help the business to better serve their loyal customers.
+We hope to examine the sales data with a eye towards labor and predicting the need of workers in the snow cone stands.  Labor is by far the most expensive part of running the business and if we can predict sales volume by day, hour and location, we can help the business to better serve their loyal customers.  We plan on doing this by using regressions to predict the number of sales during each hour so that the employer can accurately predict labor in the future weeks.
