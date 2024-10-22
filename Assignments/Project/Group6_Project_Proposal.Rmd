@@ -1,0 +1,42 @@
+---
+title: "Project:  SnOasis"
+author: "Nicholas Jacob, Yechang Qi, and Zayne Mclaughlin"
+date: "2024-10-21"
+output: pdf_document
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+#knitr::opts_chunk$set(include = FALSE) #this will make none of the code appear unless we ask it to.
+library(ggplot2)
+#library(corrplot)
+#library(ggfortify)
+library(MASS)
+library(caret)
+library(magrittr)
+library(dplyr)
+#library(HSAUR2)
+#library(outliers)
+#library(ggbiplot)
+#library(GGally)
+#library(gridExtra)
+#library(mice)
+library(forcats)
+library(knitr)
+library(car)
+library(pls)
+library(lars)
+```
+# Proposal
+
+Our team will analyze sales data from multiple snow cone stands in Ada Oklahoma.  The data is available on [GitHub](https://github.com/nurfnick/SnOasis/refs/heads/main/snoasisData.csv)
+```{r}
+df = read.csv("https://github.com/nurfnick/SnOasis/raw/refs/heads/main/snoasisData.csv")
+tail(df)
+```
+![SnOasis Logo]
+
+We see that there are about 76000 entries in the dataset representing 37000 separate sales transactions.  This includes multiple locations and lots of point of sales data that was gathered for tax and reporting purposes.  
+
+We hope to examine the sales data with a eye towards labor and predicting the needs of workers in the snow cone stands.  Labor is by far the most expensive part of running the business and if we can predict sales volume by day, hour and location, we can help the business to better serve their loyal customers.
