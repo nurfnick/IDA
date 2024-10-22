@@ -69,3 +69,5 @@ r_squared <- cor(trainNumeric$targetRevenue, trainNumeric$predictedRevenue)^2
 
 cat("Training RMSE:", rmse, "\n")
 cat("Training R²:", r_squared, "\n")
+
+```
