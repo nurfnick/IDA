@@ -1,6 +1,6 @@
 ---
 title: "Assignment 6 Kaggle Competition"
-author: "Nicholas Jacob and Yechang Qi"
+author: "Nicholas Jacob, Yechang Qi and Zayne McLaughlin"
 date: "2024-09-05"
 output: pdf_document
 ---
