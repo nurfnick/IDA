@@ -1,0 +1,71 @@
+---
+title: "Assignment 6 Kaggle Competition"
+author: "Nicholas Jacob, Yechang Qi, and Zayne Mclaughlin"
+date: "2024-09-05"
+output: pdf_document
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+library(ggplot2)
+library(caret)
+library(pls)
+library(dplyr)
+library(lubridate)
+# Load the dataset
+train <- read.csv("Train.csv", encoding = "latin1")
+
+# Ensure custId is a factor and revenue is numeric
+train$custId <- as.factor(train$custId)
+train$revenue <- as.numeric(train$revenue)
+
+# Create the target variable as the log of total revenue for each customer
+train <- train %>% 
+  dplyr::group_by(custId) %>%
+  dplyr::mutate(targetRevenue = log(sum(revenue, na.rm = TRUE) + 1)) %>%
+  dplyr::ungroup()
+# Select numeric columns for modeling, excluding irrelevant columns like `sessionId`
+trainNumeric <- train %>% 
+  dplyr::select(-revenue, -sessionId) %>%
+  dplyr::select(where(is.numeric))
+
+# Impute missing values with column means for numeric columns
+trainNumeric <- trainNumeric %>%
+  mutate(across(where(is.numeric), ~ ifelse(is.na(.), mean(., na.rm = TRUE), .)))
+
+# Remove zero variance columns (if any)
+zero_var_cols <- nearZeroVar(trainNumeric, saveMetrics = TRUE)
+zero_var_cols_to_remove <- rownames(zero_var_cols[zero_var_cols$zeroVar == TRUE, ])
+trainNumeric <- trainNumeric %>% select(-all_of(zero_var_cols_to_remove))
+
+# Check the resulting dataset
+str(trainNumeric)
+# Set up cross-validation for PLS model
+trainControl <- trainControl(method = "cv", number = 5)
+
+# Train the PLS model using the caret package
+plsFit <- train(targetRevenue ~ ., data = trainNumeric, 
+                method = "pls", 
+                preProcess = c("center", "scale"), 
+                trControl = trainControl, 
+                tuneLength = 10)  # tuneLength to explore more components
+
+# Print the PLS model summary
+print(plsFit)
+# Get predictions for training data
+predictedValues <- predict(plsFit, newdata = trainNumeric)
+trainNumeric$predictedRevenue <- predictedValues
+
+# Plot predicted vs actual values to visually assess model performance
+ggplot(trainNumeric, aes(x = targetRevenue, y = predictedRevenue)) + 
+  geom_point(alpha = 0.6) +
+  geom_abline(intercept = 0, slope = 1, color = "red") +
+  labs(title = "PLS: Predicted vs Actual Revenue", x = "Actual Revenue (log)", y = "Predicted Revenue (log)") +
+  theme_minimal()
+
+# Calculate RMSE and R² for training data predictions
+rmse <- sqrt(mean((trainNumeric$targetRevenue - trainNumeric$predictedRevenue)^2))
+r_squared <- cor(trainNumeric$targetRevenue, trainNumeric$predictedRevenue)^2
+
+cat("Training RMSE:", rmse, "\n")
+cat("Training R²:", r_squared, "\n")
