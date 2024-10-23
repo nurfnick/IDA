@@ -60,6 +60,40 @@ df %>%
   geom_bar() +
   labs(title = "Sales by Hour")
 ```
+```{r}
+df %>% 
+  mutate(month = factor(case_match(month(dt),
+                        1 ~ "Jan",
+                        2 ~ "Feb",
+                        3 ~ "Mar",
+                        4 ~ "Apr",
+                        5 ~ "May",
+                        6 ~ "Jun",
+                        7 ~ "Jul",
+                        8 ~ "Aug",
+                        9 ~ "Sep",
+                        10 ~ "Oct",
+                        11 ~ "Nov",
+                        12 ~ "Dec"), 
+         levels = c("Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"))) %>%
+  ggplot(aes(x = month)) +
+    geom_bar() +
+  labs(title = "Sales by Month")
+```
+```{r}
+df$weekdays <- factor(weekdays(df$dt), 
+                         levels = c("Sunday", 
+                                    "Monday", 
+                                    "Tuesday",
+                                    "Wednesday",
+                                    "Thursday",
+                                    "Friday",
+                                    "Saturday"))
+
+df %>%
+  ggplot(aes(x = weekdays))+
+  geom_bar()
+```
 
 
 
