@@ -32,7 +32,7 @@ library(lars)
 
 # Proposal
 
-Our team will analyze sales data from multiple snow cone stands in Ada Oklahoma.  The data is available on [GitHub](https://github.com/nurfnick/SnOasis/refs/heads/main/snoasisData.csv)
+Our team will analyze sales data from multiple snow cone stands in Ada Oklahoma.  The data is available on [GitHub](https://github.com/nurfnick/SnOasis/refs/heads/main/snoasisData.csv) with the following link https://github.com/nurfnick/SnOasis/refs/heads/main/snoasisData.csv 
 ```{r, include =FALSE}
 df = read.csv("https://github.com/nurfnick/SnOasis/raw/refs/heads/main/snoasisData.csv")
 tail(df)
