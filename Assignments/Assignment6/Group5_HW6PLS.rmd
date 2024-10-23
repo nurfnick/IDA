@@ -63,6 +63,9 @@ ggplot(trainNumeric, aes(x = targetRevenue, y = predictedRevenue)) +
   labs(title = "PLS: Predicted vs Actual Revenue", x = "Actual Revenue (log)", y = "Predicted Revenue (log)") +
   theme_minimal()
 
+
+
+
 # Calculate RMSE and R² for training data predictions
 rmse <- sqrt(mean((trainNumeric$targetRevenue - trainNumeric$predictedRevenue)^2))
 r_squared <- cor(trainNumeric$targetRevenue, trainNumeric$predictedRevenue)^2
@@ -70,4 +73,30 @@ r_squared <- cor(trainNumeric$targetRevenue, trainNumeric$predictedRevenue)^2
 cat("Training RMSE:", rmse, "\n")
 cat("Training R²:", r_squared, "\n")
 
+
+
+#Adding the test data
+test <- read.csv("Test.csv",encoding = "latin1" )
+
+
+testNumeric <- test %>% 
+  dplyr::select( -sessionId) %>%
+  dplyr::select(where(is.numeric))
+
+# Impute missing values with column means for numeric columns
+testNumeric <- testNumeric %>%
+  mutate(across(where(is.numeric), ~ ifelse(is.na(.), mean(., na.rm = TRUE), .)))
+
+# Remove zero variance columns (if any)
+testNumeric <- testNumeric %>% select(-all_of(zero_var_cols_to_remove))
+
+predictedValues <- predict(plsFit, newdata = testNumeric)
+testNumeric$predictedRevenue <- predictedValues
+
+testNumeric %>%
+  group_by(custId) %>%
+  mutate(predRevenue = mean(predictedRevenue)) %>%
+  select(c(custId,predRevenue)) %>%
+  distinct() %>%
+  write.csv("zayneResult.csv", row.names = FALSE)
 ```

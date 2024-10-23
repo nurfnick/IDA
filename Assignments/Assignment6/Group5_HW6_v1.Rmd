@@ -219,7 +219,7 @@ Table 2 provides a Descriptive Summary of Categorical Variables in the dataset. 
 # Group by custId and calculate the total target revenue per customer
 customer_revenue <- train %>%
   group_by(custId) %>%
-  summarize(total_targetRevenue = sum(targetRevenue, na.rm = TRUE))  
+  summarize(total_targetRevenue = mean(targetRevenue, na.rm = TRUE))  
 # Summing targetRevenue for each customer
 
 # Plot the total target revenue per customer using ggplot
