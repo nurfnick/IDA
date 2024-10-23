@@ -90,12 +90,15 @@ testNumeric <- testNumeric %>%
 # Remove zero variance columns (if any)
 testNumeric <- testNumeric %>% select(-all_of(zero_var_cols_to_remove))
 
+#make the prediction
 predictedValues <- predict(plsFit, newdata = testNumeric)
 testNumeric$predictedRevenue <- predictedValues
 
+#create the output
 testNumeric %>%
   group_by(custId) %>%
   mutate(predRevenue = mean(predictedRevenue)) %>%
+  mutate(predRevenue = ifelse(predRevenue<0, 0,predRevenue))%>%
   select(c(custId,predRevenue)) %>%
   distinct() %>%
   write.csv("zayneResult.csv", row.names = FALSE)
