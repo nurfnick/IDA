@@ -1,0 +1,67 @@
+---
+title: "Project:  SnOasis"
+author: "Nicholas Jacob, Yechang Qi, and Zayne Mclaughlin"
+date: "2024-10-21"
+institute: "University of Oklahoma"
+toc: true
+output: pdf_document
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+#knitr::opts_chunk$set(include = FALSE) #this will make none of the code appear unless we ask it to.
+library(ggplot2)
+#library(corrplot)
+#library(ggfortify)
+library(MASS)
+library(caret)
+library(magrittr)
+library(dplyr)
+#library(HSAUR2)
+#library(outliers)
+#library(ggbiplot)
+#library(GGally)
+#library(gridExtra)
+#library(mice)
+library(forcats)
+library(knitr)
+library(car)
+library(pls)
+library(lars)
+library(lubridate)
+```
+![SnOasis Logo](snoImage.png)
+
+# Data Cleaning
+
+
+```{r dataload}
+df = read.csv("https://github.com/nurfnick/SnOasis/raw/refs/heads/main/snoasisData.csv")
+tail(df)
+```
+
+Time needs to be cleaned up.  Made it into datetime.
+
+```{r}
+
+df$dt <- make_datetime(year(mdy(df$Date)), 
+              month(mdy(df$Date)),
+              day(mdy(df$Date)),
+              hour(hms(df$Time)),
+              minute(hms(df$Time)))
+```
+
+
+```{r}
+df %>%
+  mutate(hour = factor(hour(dt), levels = c(9,10,11,12,1,2,3,4,5,6,7,8)))%>%
+  ggplot(aes(x = hour)) +
+  geom_bar() +
+  labs(title = "Sales by Hour")
+```
+
+
+
+
+
