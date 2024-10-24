@@ -1,0 +1,132 @@
+---
+title: "Assignment 6 Kaggle Competition"
+author: "Nicholas Jacob and Yechang Qi"
+date: "2024-09-05"
+output: pdf_document
+---
+```{r setupinstall, include = FALSE}
+# List of required packages
+packages <- c("ggplot2", "MASS", "caret", "magrittr", "dplyr", 
+              "forcats", "knitr", "car", "pls", "lars", "lubridate","reshape2","fastDummies","glmnet")
+
+# Function to check and install packages
+install_if_missing <- function(p) {
+  if (!requireNamespace(p, quietly = TRUE)) {
+    install.packages(p, dependencies = TRUE)
+  }
+}
+# Install all packages
+invisible(lapply(packages, install_if_missing))
+```
+
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+library(ggplot2)
+library(reshape2)
+library(scales)
+library(fastDummies)
+library(kableExtra)
+library(MASS)
+library(caret)
+library(magrittr)
+library(dplyr)
+library(glmnet)
+#library(outliers)
+#library(ggbiplot)
+#library(GGally)
+#library(gridExtra)
+library(tidyr)
+library(forcats)
+library(knitr)
+library(car)
+library(pls)
+library(lars)
+library(lubridate)
+```
+
+```{r }
+train = read.csv("Train.csv")
+```
+
+```{r}
+train <- train %>% 
+  group_by(custId) %>%
+  #mutate(totalRevenue = sum(revenue)) %>%
+  mutate(targetRevenue = log(sum(revenue) +1)) %>%
+  ungroup()
+```
+
+## Model 2: 
+```{r}
+# Create dummy variables for categorical variables
+trainFactor <- train %>%
+  select(channelGrouping, browser, deviceCategory, subContinent, source)
+trainFactor_dummies <- model.matrix(~ . -1, data=trainFactor) %>%
+  as.data.frame()
+# Keep only selected categorical columns
+trainNumeric <- train %>% 
+  dplyr::select(where(is.numeric))
+# Combine the encoded categorical data with the numeric data
+train_full <- cbind(trainNumeric, trainFactor_dummies)%>%  
+  replace(is.na(.),0)
+```
+
+```{r}
+
+# Prepare the predictor matrix (X) and the response vector (y)
+X <- as.matrix(train_full %>% select(-targetRevenue,-revenue))  # Exclude the target variable
+y <- train_full$targetRevenue
+```
+```{r}
+# Fit the LASSO model with cross-validation
+set.seed(2024)  
+lasso_glm_model <- cv.glmnet(X, y, alpha = 1, family = "gaussian", standardize = TRUE)
+
+# Print the best lambda (penalty parameter)
+print(lasso_glm_model$lambda.min)
+
+# Plot the cross-validation results to visualize the best lambda
+plot(lasso_glm_model)
+```
+
+```{r model2}
+test = read.csv('Test.csv')
+
+# Separate numeric and factor data
+testFactor <- test %>%
+  dplyr::select(channelGrouping, browser, deviceCategory, subContinent, source)%>%  
+  mutate(across(everything(), ~ as.numeric(factor(.)))) 
+# Keep only selected categorical columns
+testNumeric <- test %>% dplyr::select(where(is.numeric))
+# Combine the encoded categorical data with the numeric data
+test_full <- cbind(testNumeric, testFactor)%>%
+  replace(is.na(.),0)
+```
+
+
+```{r }
+
+# Align the columns of test_full with the training set
+missing_cols <- setdiff(colnames(X), colnames(test_full))
+test_full[missing_cols] <- 0  # Add missing columns as 0
+
+# Prepare the test predictor matrix again
+X_test <- as.matrix(test_full[, colnames(X)])  # Ensure column order matches training set
+
+# Predict on the test data using the LASSO-regularized GLM
+predicted_targetRevenue <- predict(lasso_glm_model, s = lasso_glm_model$lambda.min, newx = X_test)
+# Set negative predicted values to zero
+predicted_targetRevenue[predicted_targetRevenue < 0] <- 0
+
+# Prepare the output dataframe
+output <- data.frame(custId = test_full$custId, predicted_targetRevenue = predicted_targetRevenue)
+
+# Aggregate duplicated custId values by averaging the predicted target revenue
+output_aggregated <- aggregate(predicted_targetRevenue ~ custId, data = output, FUN = max)
+
+# Save the aggregated output to a CSV file
+write.csv(output_aggregated, "predicted_revenue.csv", row.names = FALSE)
+
+```
