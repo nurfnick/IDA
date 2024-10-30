@@ -1,0 +1,257 @@
+---
+title: "Assignment 7 Predictions"
+author: "Nicholas Jacob"
+date: "2024-10-29"
+output: pdf_document
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, include = FALSE)
+library(ggplot2)
+library(caret)
+library(pls)
+library(dplyr)
+library(lubridate)
+library(tidyr)
+library(stats)
+library(forcats)
+library(kableExtra)
+library(gmodels)
+# Load the dataset
+train <- read.csv("hm7-Train-2024.csv", encoding = "latin1")
+
+glimpse(train)
+
+trainNumeric <- train %>% 
+  dplyr::select(where(is.numeric))
+
+trainFactor <- train %>% 
+  dplyr::select(where(is.character))%>% ##|where(is.logical) )%>%
+  mutate_all(na_if,"")%>%
+  mutate_all(factor)
+
+
+
+
+names(trainFactor)
+```
+
+```{r}
+Q1<-function(x,na.rm=TRUE) {
+quantile(x,na.rm=na.rm)[2]
+}
+Q3<-function(x,na.rm=TRUE) {
+quantile(x,na.rm=na.rm)[4]
+}
+
+
+myNumericSummary <- function(x){
+  c(length(x), n_distinct(x), sum(is.na(x)), mean(x, na.rm=TRUE),
+  min(x,na.rm=TRUE), Q1(x,na.rm=TRUE), median(x,na.rm=TRUE), Q3(x,na.rm=TRUE),
+  max(x,na.rm=TRUE), sd(x,na.rm=TRUE))
+}
+```
+
+
+```{r}
+
+# Summary function (assuming you have defined `myNumericSummary` elsewhere in your code)
+numericSummary <- trainNumeric %>%
+  summarise_all(myNumericSummary) %>%
+  # Adding descriptive statistics to the numeric summary table
+  cbind(stat = c("n", "unique", "missing", "mean", "min", "Q1", "median", "Q3", "max",
+                 "sd")) %>%
+  # Pivoting the numeric summary table for readability and adding percentage calculations
+  tidyr::pivot_longer(cols = "patientID":"readmitted", names_to = "variable", 
+                      values_to = "value") %>%
+  tidyr::pivot_wider(names_from = stat, values_from = value) %>%
+  dplyr::mutate(
+    missing_pct = 100 * missing / n,
+    unique_pct = 100 * unique / n
+  ) %>%
+  # Selecting and ordering columns
+  dplyr::select(variable, n, missing, missing_pct, unique, unique_pct, everything())
+
+# Limiting the number of digits in the table and using scientific notation
+options(digits = 2, scipen = 0)
+```
+
+```{r, include = TRUE, echo = FALSE, fig.pos = "H"}
+
+# Displaying the final table with larger row distance
+numericSummary %>%  
+  kable(digits = 2, format = "latex", booktabs = TRUE, 
+        caption = "Descriptive Summary of Numeric Variables") %>%
+  kable_styling(font_size = 12,latex_options = "scale_down") %>%
+  row_spec(0, bold = TRUE) %>% # Make header bold
+  row_spec(1:nrow(numericSummary), extra_latex_after = "\\addlinespace[0.5em]")
+```
+Looking at Table 1, we see a few missing values for indicators.  These will not be utilized in the analysis.  We'll impute the time and lab procedures to zeros. Readmitted, admission type and source, and discharge will need to be treated as a factor as well so it will need to be removed.
+```{r}
+trainNumeric <- trainNumeric %>%
+  mutate_all(~replace(.,is.na(.),0)) %>%
+  select(-c(indicator_2_level,readmitted, admission_type, admission_source, discharge_disposition))
+```
+```{r}
+# Function to get mode, 2nd mode, and least common mode
+getmodes <- function(v, type=1) {
+  tbl <- table(v)
+  if (type == 1) return(names(which.max(tbl)))  # 1st mode
+  if (type == -1) return(names(which.min(tbl)))  # Least common mode
+  if (type == 2 && length(tbl) > 1) {
+    m1 <- which.max(tbl)
+    return(names(which.max(tbl[-m1])))  # 2nd mode
+  }
+  return("NA")  # Default when no valid 2nd mode
+}
+
+# Function to get mode frequency, 2nd mode frequency
+getmodesCnt <- function(v, type=1) {
+  tbl <- table(v)
+  if (type == 1) return(max(tbl))  # 1st mode frequency
+  if (type == 2 && length(tbl) > 1) {
+    m1 <- which.max(tbl)
+    return(max(tbl[-m1]))  # 2nd mode frequency
+  }
+  return(NA)  # Default when no valid 2nd mode frequency
+}
+```
+
+```{r}
+# Define categorical summary function
+myCategoricalSummary <- function(x) {
+  c(
+    length(x),
+    sum(is.na(x)),
+    n_distinct(x),
+    getmodes(x, 1), getmodesCnt(x, 1),
+    getmodes(x, 2), getmodesCnt(x, 2)
+  )
+}
+
+# Apply the categorical summary function to all factors in trainFactor
+factorSummary <- trainFactor %>%
+  summarise_all(myCategoricalSummary)
+
+# Add column titles to the factorSummary table
+factorSummary <- cbind(
+  stat = c("n", "missing", "unique", "1st mode", "first_mode_freq",
+           "2nd mode", "second_mode_freq"),
+  factorSummary
+)
+
+
+# Reshape the data and calculate percentages for missing and unique values
+factorSummaryFinal <- factorSummary %>%
+  tidyr::pivot_longer(cols = "race":"diabetesMed", 
+                      names_to = "variable", values_to = "value") %>%
+  tidyr::pivot_wider(names_from = stat, values_from = value) %>%
+  dplyr::mutate(
+    missing_pct = 100 * as.numeric(missing) / as.numeric(n),  # Calculate missing percentage
+    unique_pct = 100 * as.numeric(unique) / as.numeric(n),  
+    # Calculate unique percentage
+    freqRatio = as.numeric(first_mode_freq) / as.numeric(second_mode_freq)  
+    # Frequency ratio
+  ) %>%
+  dplyr::select(variable, n, missing, missing_pct, unique, unique_pct, freqRatio, everything())
+
+# Exclude specific columns (variables) from the final table
+factorSummaryFinal <- factorSummaryFinal %>%
+  dplyr::filter(!variable %in% c("referralPath", "adContent", 
+                                 "adwordsClickInfo.page", 
+                                 "adwordsClickInfo.slot", 
+  "adwordsClickInfo.gclId","adwordsClickInfo.adNetworkType"))
+
+# Set display options for precision and formatting
+options(digits = 3, scipen = 99)
+```
+
+```{r ,include = TRUE,echo = FALSE, fig.pos = "H"}
+# Display the final summary table with kable
+factorSummaryFinal %>% 
+  kable(digits = 2, format = "latex", booktabs = TRUE, 
+        caption = "Descriptive Summary of Categorical Variables") %>%
+  kable_styling(font_size = 12,latex_options = c("H", "scale_down")) %>%
+  row_spec(0, bold = TRUE) %>%  # Make header bold
+  row_spec(1:nrow(factorSummaryFinal), extra_latex_after = "\\addlinespace[0.25em]") 
+
+```
+ A few of the categorical variables only have one level so they will be removed from the analysis.  For race, gender, payer_code, medical_specialty and diagnosis, I'll make a category for NA.  That missing age is just going to be made the median.
+```{r}
+names(trainNumeric)
+```
+```{r}
+
+
+trainFactor <- train %>% 
+  dplyr::select(where(is.character)|starts_with("read")|starts_with("admis")|starts_with("discha"))%>% 
+  mutate(readmitted = as.character(readmitted) )%>%
+  mutate(admission_source = as.character(admission_source))%>%
+  mutate(admission_type = as.character(admission_type))%>%
+  mutate(discharge_disposition = as.character(discharge_disposition))%>%
+  mutate_all(na_if,"") %>%
+  mutate_all(factor) %>%
+  select(-c(examide,citoglipton,glimepiride.pioglitazone)) %>%
+  mutate(race = fct_na_value_to_level(race)) %>%
+  mutate(gender = fct_na_value_to_level(gender)) %>%
+  mutate(payer_code = fct_na_value_to_level(payer_code)) %>%
+  mutate(medical_specialty = fct_na_value_to_level(medical_specialty)) %>%
+  mutate(diagnosis = fct_na_value_to_level(diagnosis)) %>%
+  mutate(age = replace(age,is.na(age),getmodes(age, 1)))
+  
+```
+```{r}
+levels(trainFactor$discharge_disposition) 
+```
+ 
+
+```{r}
+names(trainFactor)
+```
+
+tried and did not give good results: age, diagnosis, gender
+
+```{r}
+trainCombined <- bind_cols(trainNumeric,
+                           readmitted = trainFactor$readmitted, 
+                           insulin = trainFactor$insulin,
+                           discharge_disposition = trainFactor$discharge_disposition, 
+                           admission_source = trainFactor$admission_source,
+                           admission_type = trainFactor$admission_type,
+                           payer_code = trainFactor$payer_code, 
+                           A1Cresult=trainFactor$A1Cresult,
+                           race = trainFactor$race)
+
+fitglm <- glm(data = trainCombined, 
+    readmitted ~ .-patientID, 
+    family = binomial )
+summary(fitglm)
+```
+```{r}
+fitglm$fitted.values
+```
+
+
+```{r, include = TRUE, echo = FALSE}
+
+CrossTable(trainCombined$readmitted, trainCombined$payer_code, prop.chisq=F, prop.t=F, prop.c=F, prop.r =F)
+```
+
+```{r}
+qplot(data=trainCombined, x=payer_code, y=age, color=as.factor(readmitted), size=2) +
+   scale_color_manual(values = c("red", "black", "dodgerblue2")) + 
+  theme(legend.position = "none")
+
+
+```
+```{r, eval = FALSE}
+trainNumeric <- train %>% 
+  dplyr::select((starts_with("time")) | (starts_with("num"))) %>%
+  mutate_all(~replace(.,is.na(.),median(., na.rm=TRUE)))
+
+trainFactor <- train %>% 
+  dplyr::select(readmitted,admission_type,discharge_disposition,diagnosis,diabetesMed,glipizide)%>%
+  mutate(readmitted = as.character(readmitted))%>%
+  mutate(admission_type = as.character(admission_type))%>%
+  mutate_all(factor) 
+```
