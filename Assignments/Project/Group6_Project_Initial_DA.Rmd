@@ -94,6 +94,19 @@ df %>%
   ggplot(aes(x = weekdays))+
   geom_bar()
 ```
+I want to group the data by 10 minute chunks so that I can accurately predict how to allocate workers.  
+```{r}
+dfBy10min <-df %>%
+  group_by(group10min = cut(dt, "10 min"),Staff) %>%
+  summarize(names = list(unique(Name)),totalSales = sum(Final.price..USD.)) %>%
+  ungroup()
+  #summarize(totalSales = sum(Final.price..USD.)) %>%
+  
+```
+
+```{r}
+dfBy10min$names[1000]
+```
 
 
 
