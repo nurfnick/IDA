@@ -226,6 +226,7 @@ fitglm <- glm(data = trainCombined,
     readmitted ~ .-patientID, 
     family = binomial )
 summary(fitglm)
+
 ```
 ```{r}
 fitglm$fitted.values
