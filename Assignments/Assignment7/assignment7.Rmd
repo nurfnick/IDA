@@ -17,6 +17,7 @@ library(stats)
 library(forcats)
 library(kableExtra)
 library(gmodels)
+library(pROC)
 # Load the dataset
 train <- read.csv("hm7-Train-2024.csv", encoding = "latin1")
 
@@ -226,12 +227,56 @@ fitglm <- glm(data = trainCombined,
     readmitted ~ .-patientID, 
     family = binomial )
 summary(fitglm)
-
 ```
 ```{r}
-fitglm$fitted.values
-```
 
+pred <- predict(fitglm, type = "response", newdata = trainCombined)
+roc.curve<- roc(trainCombined$readmitted,pred, ci = T)
+plot(roc.curve)
+```
+```{r}
+threshold <- 0.5
+confusionMatrix(factor(pred >threshold),factor(trainCombined$readmitted==1),positive = "TRUE")
+```
+```{r}
+fitControl <- trainControl(method = "cv",
+                           number = 5)
+glmcv <- train(readmitted ~ .-patientID, data = trainCombined,
+                method = "glm",
+               trControl = fitControl)
+glmcv$results$Accuracy
+```
+```{r}
+ridgeGrid <- expand.grid(alpha=0,
+                         lambda = seq(0.011,0.013
+                                      ,length = 10))
+glmnetcv <- train(readmitted ~ .-patientID, data = trainCombined,
+                method = "glmnet",
+               trControl = fitControl,
+               tuneGrid = ridgeGrid)
+
+
+glmnetcv$bestTune$lambda
+```
+```{r}
+lassoGrid <- expand.grid(alpha=1,
+                         lambda = seq(0.000001,0.001
+                                      ,length = 10))
+glmnetlassocv <- train(readmitted ~ .-patientID, data = trainCombined,
+                method = "glmnet",
+               trControl = fitControl,
+               tuneGrid = lassoGrid)
+
+
+glmnetlassocv
+```
+```{r}
+dtreeGrid <- expand.grid(cp = seq(0.0001,0.001,length = 10))
+rpartcv <- train(readmitted ~ .-patientID, data = trainCombined,
+                method = "rpart",
+               trControl = fitControl,
+               tuneGrid = dtreeGrid)
+```
 
 ```{r, include = TRUE, echo = FALSE}
 
@@ -256,3 +301,13 @@ trainFactor <- train %>%
   mutate(admission_type = as.character(admission_type))%>%
   mutate_all(factor) 
 ```
+
+
+## Summarize the Models
+
+|Model|Method |Package |Hyperparameter | Selection|Accuracy|Kappa|
+|-----|-------|--------|---------------|----------|--------|-----|
+|logreg|glm|stats|NA|NA|`r glmcv$results$Accuracy`|`r glmcv$results$Kappa`|
+|ridge (logreg)|glmnet|glmnet|lambda|`r glmnetcv$bestTune$lambda`|`r mean(glmnetcv$results$Accuracy)`|`r mean(glmnetcv$results$Kappa)`|
+|lasso|glmnet|glmnet|lambda|`r glmnetlassocv$bestTune$lambda`|`r mean(glmnetlassocv$results$Accuracy)`|`r mean(glmnetlassocv$results$Kappa)`|
+|decision tree|rpart|rpart|cp|`r rpartcv$bestTune$cp`|`r mean(rpartcv$result$Accuracy)`|`r mean(rpartcv$result$Kappa)`|
