@@ -331,6 +331,21 @@ svmcv <- train(readmitted ~ .-patientID, data = trainSVM,
 svmcv
 #I could never get this code to run on my machine...
 ```
+```{r, eval = FALSE}
+knnGrid <- expand.grid(k = seq(1,10,length = 2))
+trainSVM <- bind_cols(trainNumeric,readmitted = trainFactor$readmitted)
+
+knncv <- train(readmitted ~ .-patientID, data = trainSVM,
+                method = "knn",
+               #trControl = fitControl,
+               metric = "Accuracy",
+               tuneGrid = knnGrid)
+library(class)
+knn(trainCombined,trainNumeric,cl = trainFactor$readmitted, k = 5, prob = TRUE)
+
+knncv
+
+```
 ```{r, include = TRUE, echo = FALSE}
 
 CrossTable(trainCombined$readmitted, trainCombined$payer_code, prop.chisq=F, prop.t=F, prop.c=F, prop.r =F)
