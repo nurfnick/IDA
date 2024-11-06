@@ -1,66 +1,237 @@
 ---
-title: "Project:  SnOasis"
-author: "Nicholas Jacob, Yechang Qi, and Zayne Mclaughlin"
-date: "2024-10-21"
-institute: "University of Oklahoma"
-toc: true
+#title: "Project:  SnOasis"
+#author: "Nicholas Jacob, Yechang Qi, James Wahome, Zayne Mclaughlin"
+#date: "2024-10-21"
+#institute: "University of Oklahoma"
+#toc: true 
 output: pdf_document
 ---
 
 ```{r setup, include = FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = FALSE)
 knitr::opts_chunk$set(warning = FALSE, message = FALSE)
-#knitr::opts_chunk$set(include = FALSE) #this will make none of the code appear unless we ask it to.
+knitr::opts_chunk$set(include = FALSE) #this will make none of the code appear unless we ask it to.
 library(ggplot2)
-#library(corrplot)
-#library(ggfortify)
-library(MASS)
-library(caret)
-library(magrittr)
-library(dplyr)
-#library(HSAUR2)
-#library(outliers)
-#library(ggbiplot)
-#library(GGally)
-#library(gridExtra)
-#library(mice)
+library(VIM)
+library(Metrics)
+library(reshape2)
+library(scales)
+library(fastDummies)
+library(kableExtra)
+library(glmnet)
+library(tidyr)
 library(forcats)
 library(knitr)
 library(car)
 library(pls)
 library(lars)
 library(lubridate)
+#library(corrplot)
+#library(ggfortify)
+library(MASS)
+library(caret)
+library(magrittr)
+library(dplyr)
+
 ```
-![SnOasis Logo](snoImage.png)
+![](snoImage.png)
 
-# Data Cleaning
+\vspace{2cm} 
+\begin{center}
+\huge \textbf{UNIVERSITY OF OKLAHOMA} \\[2ex]
+\LARGE\textbf{DSA/ISE 5103 – INTELLIGENT DATA ANALYTICS}\\[4ex]
 
+\huge \textbf{Project: SnOasis} \\[4ex]
+
+\Large \textbf{Nicholas Jacob, Yechang Qi, James Wahome, Zayne Mclaughlin} \\[4ex]
+\LARGE \textbf{Course Project Group 6} \\[10ex]
+
+\LARGE \textbf{2024-10-21}\\[1ex]
+\end{center}
+
+\newpage
+
+# Initial Data Analysis
+
+Our dataset needs some cleaning before analysis. Although we don't have missing values thanks to our real-time recording system, we still need to handle a few things. First, we'll deal with outliers, specifically negative values in Quantity or Final Price that show returns or corrections. We'll find and remove these transactions along with their original entries. We'll also check if any unusually high prices or quantities need to be capped. Next, we'll properly format our category data like Staff, Location, and Product Names for analysis, possibly grouping similar products together to keep things simple. Finally, we'll clean up our date and time information, fixing any weird symbols and adding useful details like day of the week and hour of day.
 
 ```{r dataload}
 df = read.csv("https://github.com/nurfnick/SnOasis/raw/refs/heads/main/snoasisData.csv")
 tail(df)
 ```
-
-Time needs to be cleaned up.  Made it into datetime.
-
 ```{r}
-
+#Time needs to be cleaned up.  Made it into datetime.
 df$dt <- make_datetime(year(mdy(df$Date)), 
               month(mdy(df$Date)),
               day(mdy(df$Date)),
               hour(hms(df$Time)),
               minute(hms(df$Time)))
+# Remove '?' from Time column
+df$Time <- gsub("\\?", "", df$Time)
 ```
 
 
 ```{r}
+dfNumeric <- df %>% 
+  dplyr::select(where(is.numeric))
+glimpse(dfNumeric)
+dfNumeric <- dfNumeric %>%
+  rename(
+    Receipt_number = `Receipt.number`,
+    Quantity = Quantity,  # this one stays the same
+    Price = `Price..USD.`,
+    Discount = `Discount..USD.`,
+    Subtotal = `Subtotal..USD.`,
+    Total_tax = `Total.tax.collected..USD.`,
+    Final_price = `Final.price..USD.`,
+    Cost_price = `Cost.price`
+  )
+```
+```{r}
+dfFactor <- df %>% 
+  dplyr::select(where(is.character))%>%
+  mutate_all(factor)
+glimpse(dfFactor)
+dfFactor <- dfFactor %>%
+  rename(
+    Tax_info = Tax.Info.Available,
+    Tax_exempt = Is.Tax.Exempt
+  )
+
+```
+
+```{r}
+Q1<-function(x,na.rm=TRUE) {
+quantile(x,na.rm=na.rm)[2]
+}
+Q3<-function(x,na.rm=TRUE) {
+quantile(x,na.rm=na.rm)[4]
+}
+```
+
+```{r}
+myNumericSummary <- function(x){
+  c(length(x), n_distinct(x), sum(is.na(x)), mean(x, na.rm=TRUE),
+  min(x,na.rm=TRUE), Q1(x,na.rm=TRUE), median(x,na.rm=TRUE), Q3(x,na.rm=TRUE),
+  max(x,na.rm=TRUE), sd(x,na.rm=TRUE))
+}
+```
+
+```{r}
+# Summary function
+numericSummary <- dfNumeric %>%
+  summarise_all(myNumericSummary) %>%
+  # Adding descriptive statistics to the numeric summary table
+  cbind(stat = c("n", "unique", "missing", "mean", "min", "Q1", "median", "Q3", "max",
+                 "sd")) %>%
+
+  tidyr::pivot_longer(cols = "Receipt_number":"Cost_price", names_to = "variable", 
+                      values_to = "value") %>%
+  tidyr::pivot_wider(names_from = stat, values_from = value) %>%
+  dplyr::mutate(
+    missing_pct = 100 * missing / n,
+    unique_pct = 100 * unique / n
+  ) %>%
+  # Selecting and ordering columns
+  dplyr::select(variable, n, missing, missing_pct, unique, unique_pct, everything())
+
+# Limiting the number of digits in the table and using scientific notation
+options(digits = 2, scipen = 0)
+```
+
+```{r, include = TRUE, fig.pos = "H"}
+# Display the Descriptive Summary of Numeric Variables
+numericSummary %>%  
+  kable(digits = 2, format = "latex", booktabs = TRUE, 
+        caption = "Descriptive Summary of Numeric Variables") %>%
+  kable_styling(font_size = 12,latex_options = c("H", "scale_down")) %>%
+  row_spec(0, bold = TRUE) %>% 
+  row_spec(1:nrow(numericSummary), extra_latex_after = "\\addlinespace[0.5em]")
+```
+
+```{r}
+# Function to get the mode
+getmode <- function(v) {
+  tbl <- table(v)
+  return(names(which.max(tbl)))  # 1st mode
+}
+
+# Function to get the mode frequency
+getmodeCnt <- function(v) {
+  tbl <- table(v)
+  return(max(tbl))  # 1st mode frequency
+}
+```
+
+```{r}
+# Define categorical summary function
+myCategoricalSummary <- function(x) {
+  c(
+    length(x),
+    sum(is.na(x)),
+    n_distinct(x),
+    getmode(x), getmodeCnt(x)
+  )
+}
+
+# Apply the categorical summary function to all factors in trainFactor
+factorSummary <- dfFactor %>%
+  summarise_all(myCategoricalSummary)
+
+# Add column titles to the factorSummary table
+factorSummary <- cbind(
+  stat = c("n", "missing", "unique", "mode", "mode_freq"),
+  factorSummary
+)
+
+# Reshape the data and calculate percentages for missing and unique values
+factorSummaryFinal <- factorSummary %>%
+  tidyr::pivot_longer(cols = "Date":"Tax_exempt", 
+                      names_to = "variable", values_to = "value") %>%
+  tidyr::pivot_wider(names_from = stat, values_from = value) %>%
+  dplyr::mutate(
+    missing_pct = 100 * as.numeric(missing) / as.numeric(n),  # Calculate missing percentage
+    unique_pct = 100 * as.numeric(unique) / as.numeric(n),  
+  ) %>%
+  dplyr::select(variable, n, missing, missing_pct, unique, unique_pct, everything())
+# Set display options for precision and formatting
+options(digits = 3, scipen = 99)
+```
+
+```{r ,include = TRUE, fig.pos = "H"}
+# Display the final summary table with kable
+factorSummaryFinal %>% 
+  kable(digits = 2, format = "latex", booktabs = TRUE, 
+        caption = "Descriptive Summary of Categorical Variables") %>%
+  kable_styling(font_size = 7,latex_options = c("H")) %>%
+  row_spec(0, bold = TRUE) %>%  # Make header bold
+  row_spec(1:nrow(factorSummaryFinal), extra_latex_after = "\\addlinespace[0.25em]")
+```
+
+
+# Visualizations
+```{r,include = TRUE}
 df %>%
   mutate(hour = factor(hour(dt), levels = c(9,10,11,12,1,2,3,4,5,6,7,8)))%>%
   ggplot(aes(x = hour)) +
   geom_bar() +
   labs(title = "Sales by Hour")
 ```
-```{r}
+```{r,include = TRUE}
+df$weekdays <- factor(weekdays(df$dt), 
+                         levels = c("Sunday", 
+                                    "Monday", 
+                                    "Tuesday",
+                                    "Wednesday",
+                                    "Thursday",
+                                    "Friday",
+                                    "Saturday"))
+
+df %>%
+  ggplot(aes(x = weekdays))+
+  geom_bar()
+```
+```{r,include = TRUE}
 df %>% 
   mutate(month = factor(case_match(month(dt),
                         1 ~ "Jan",
@@ -80,22 +251,11 @@ df %>%
     geom_bar() +
   labs(title = "Sales by Month")
 ```
-```{r}
-df$weekdays <- factor(weekdays(df$dt), 
-                         levels = c("Sunday", 
-                                    "Monday", 
-                                    "Tuesday",
-                                    "Wednesday",
-                                    "Thursday",
-                                    "Friday",
-                                    "Saturday"))
 
-df %>%
-  ggplot(aes(x = weekdays))+
-  geom_bar()
-```
-I want to group the data by 10 minute chunks so that I can accurately predict how to allocate workers.  
+
+ 
 ```{r}
+#I want to group the data by 10 minute chunks so that I can accurately predict how to allocate workers. 
 dfBy10min <-df %>%
   group_by(group10min = cut(dt, "10 min"),Staff) %>%
   summarize(names = list(unique(Name)),totalSales = sum(Final.price..USD.)) %>%
@@ -108,7 +268,10 @@ dfBy10min <-df %>%
 dfBy10min$names[1000]
 ```
 
-
-
-
+\newpage
+# Appendix: Data quality report
+```{r,include = TRUE}
+glimpse(dfNumeric)
+glimpse(dfFactor)
+```
 
