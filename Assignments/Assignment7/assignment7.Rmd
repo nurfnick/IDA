@@ -228,13 +228,54 @@ fitglm <- glm(data = trainCombined,
     family = binomial )
 summary(fitglm)
 ```
-```{r}
+```{r creating test}
+dftest <- read.csv("hm7-Test-2024.csv", encoding = "latin1")
+
+
+testNumeric <- dftest %>% 
+  dplyr::select(where(is.numeric))
+
+testNumeric <- testNumeric %>%
+  mutate_all(~replace(.,is.na(.),0)) %>%
+  select(-c(indicator_2_level, admission_type, admission_source, discharge_disposition))
+
+testFactor <- dftest %>% 
+  dplyr::select(where(is.character)|starts_with("read")|starts_with("admis")|starts_with("discha"))%>% 
+  #mutate(readmitted = as.character(readmitted) )%>%
+  mutate(admission_source = as.character(admission_source))%>%
+  mutate(admission_type = as.character(admission_type))%>%
+  mutate(discharge_disposition = as.character(discharge_disposition))%>%
+  mutate_all(na_if,"") %>%
+  mutate_all(factor) %>%
+  select(-c(examide,citoglipton,glimepiride.pioglitazone)) %>%
+  mutate(race = fct_na_value_to_level(race)) %>%
+  mutate(gender = fct_na_value_to_level(gender)) %>%
+  mutate(payer_code = fct_na_value_to_level(payer_code)) %>%
+  mutate(medical_specialty = fct_na_value_to_level(medical_specialty)) %>%
+  mutate(diagnosis = fct_na_value_to_level(diagnosis)) %>%
+  mutate(age = replace(age,is.na(age),getmodes(age, 1)))
+
+testCombined <- bind_cols(testNumeric,
+                           readmitted = testFactor$readmitted, 
+                           insulin = testFactor$insulin,
+                           discharge_disposition = testFactor$discharge_disposition, 
+                           admission_source = testFactor$admission_source,
+                           admission_type = testFactor$admission_type,
+                           payer_code = testFactor$payer_code, 
+                           A1Cresult=testFactor$A1Cresult,
+                           race = testFactor$race)
+pred <- predict(fitglm, type = "response", newdata = testCombined)
+
+output <- cbind(patientID = dftest$patientID, predReadmit = pred)
+write.csv(output, "nicksResult.csv",row.names = FALSE)
+```
+```{r, include = TRUE}
 
 pred <- predict(fitglm, type = "response", newdata = trainCombined)
 roc.curve<- roc(trainCombined$readmitted,pred, ci = T)
 plot(roc.curve)
 ```
-```{r}
+```{r, include = TRUE}
 threshold <- 0.5
 confusionMatrix(factor(pred >threshold),factor(trainCombined$readmitted==1),positive = "TRUE")
 ```
@@ -288,15 +329,17 @@ svmcv <- train(readmitted ~ .-patientID, data = trainSVM,
 
 
 svmcv
+#I could never get this code to run on my machine...
 ```
 ```{r, include = TRUE, echo = FALSE}
 
 CrossTable(trainCombined$readmitted, trainCombined$payer_code, prop.chisq=F, prop.t=F, prop.c=F, prop.r =F)
 ```
 
-```{r}
-qplot(data=trainCombined, x=payer_code, y=age, color=as.factor(readmitted), size=2) +
-   scale_color_manual(values = c("red", "black", "dodgerblue2")) + 
+```{r, include = TRUE}
+ggplot(data = train, aes(x = payer_code, y = age, colour = as.factor(readmitted)))+
+  geom_jitter(size=2) +
+   scale_color_manual(values = c("red", "black")) + 
   theme(legend.position = "none")
 
 
@@ -321,5 +364,4 @@ trainFactor <- train %>%
 |logreg|glm|stats|NA|NA|`r glmcv$results$Accuracy`|`r glmcv$results$Kappa`|
 |ridge (logreg)|glmnet|glmnet|lambda|`r glmnetcv$bestTune$lambda`|`r mean(glmnetcv$results$Accuracy)`|`r mean(glmnetcv$results$Kappa)`|
 |lasso|glmnet|glmnet|lambda|`r glmnetlassocv$bestTune$lambda`|`r mean(glmnetlassocv$results$Accuracy)`|`r mean(glmnetlassocv$results$Kappa)`|
-|decision tree|rpart|rpart|cp|`r rpartcv$bestTune
-$cp`|`r mean(rpartcv$result$Accuracy)`|`r mean(rpartcv$result$Kappa)`|
+|decision tree|rpart|rpart|cp|`r rpartcv$bestTune$cp`|`r mean(rpartcv$results$Accuracy)`|`r mean(rpartcv$results$Kappa)`|
