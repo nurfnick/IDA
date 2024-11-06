@@ -303,6 +303,34 @@ df %>%
   # Minimal theme for a cleaner appearance
   theme_minimal()
 ```
+We were curious when the most sales occured.  Instead of doing the heat map with the average, we recreated it with the total of all sales for those days and hours.
+
+```{r include = TRUE}
+df %>%
+  mutate(
+    # Convert hour and weekday into factors for better control in the plot
+    hour = factor(hour(dt)),
+    weekdays = factor(weekdays(dt), 
+                      levels = c("Sunday", "Monday", "Tuesday", "Wednesday", 
+                                 "Thursday", "Friday", "Saturday"))
+  ) %>%
+  # Group data by each combination of weekday and hour to calculate average sales
+  group_by(weekdays, hour) %>%
+  summarize(total_sales = sum(Final.price..USD., na.rm = TRUE)) %>%
+  # Plot heatmap with hour on the x-axis and weekday on the y-axis
+  ggplot(aes(x = hour, y = weekdays, fill = total_sales)) +
+  # Use a tile geometry for the heatmap and set color gradient for average sales
+  geom_tile(color = "white") +
+  # Color gradient from light yellow to dark red, showing lower to higher sales
+  scale_fill_gradient(low = "lightyellow", high = "darkred") +
+  # Add titles and labels for the heatmap
+  labs(title = "Average Sales by Hour and Day", 
+       x = "Hour", 
+       y = "Weekday", 
+       fill = "Total Sales (USD)") +
+  # Minimal theme for a cleaner appearance
+  theme_minimal()
+```
 
  
 ```{r}
