@@ -251,6 +251,54 @@ df %>%
     geom_bar() +
   labs(title = "Sales by Month")
 ```
+# Create a box plot to show the distribution of sales by weekday
+# This visualization helps identify variations in sales across days, highlighting any specific patterns
+# It also shows outliers and spread, which can be useful for analyzing peak days and sales consistency
+
+df %>%
+  mutate(
+    # Convert weekdays to an ordered factor to maintain consistent weekday order on the x-axis
+    weekdays = factor(weekdays(dt), 
+                      levels = c("Sunday", "Monday", "Tuesday", "Wednesday", 
+                                 "Thursday", "Friday", "Saturday"))
+  ) %>%
+  ggplot(aes(x = weekdays, y = Final.price..USD.)) +
+  # Create a box plot for sales (final price) by each weekday
+  geom_boxplot(fill = "skyblue", color = "darkblue", outlier.color = "red") +
+  # Add titles and labels for clarity
+  labs(title = "Distribution of Sales by Weekday", 
+       x = "Weekday", 
+       y = "Final Price (USD)") +
+  # Use a minimal theme for a clean look
+  theme_minimal()
+# Create a heatmap to show average sales by hour and day of the week
+# This visualization is useful for identifying peak sales times throughout the week,
+# aiding in decisions around staffing or promotions for specific times
+
+df %>%
+  mutate(
+    # Convert hour and weekday into factors for better control in the plot
+    hour = factor(hour(dt)),
+    weekdays = factor(weekdays(dt), 
+                      levels = c("Sunday", "Monday", "Tuesday", "Wednesday", 
+                                 "Thursday", "Friday", "Saturday"))
+  ) %>%
+  # Group data by each combination of weekday and hour to calculate average sales
+  group_by(weekdays, hour) %>%
+  summarize(avg_sales = mean(Final.price..USD., na.rm = TRUE)) %>%
+  # Plot heatmap with hour on the x-axis and weekday on the y-axis
+  ggplot(aes(x = hour, y = weekdays, fill = avg_sales)) +
+  # Use a tile geometry for the heatmap and set color gradient for average sales
+  geom_tile(color = "white") +
+  # Color gradient from light yellow to dark red, showing lower to higher sales
+  scale_fill_gradient(low = "lightyellow", high = "darkred") +
+  # Add titles and labels for the heatmap
+  labs(title = "Average Sales by Hour and Day", 
+       x = "Hour", 
+       y = "Weekday", 
+       fill = "Avg Sales (USD)") +
+  # Minimal theme for a cleaner appearance
+  theme_minimal()
 
 
  
