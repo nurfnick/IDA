@@ -1,0 +1,439 @@
+---
+#title: "Project:  SnOasis"
+#author: "Nicholas Jacob, Yechang Qi, James Wahome, Zayne Mclaughlin"
+#date: "2024-10-21"
+#institute: "University of Oklahoma"
+#toc: true 
+output: 
+  pdf_document:
+    latex_engine: xelatex
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+knitr::opts_chunk$set(include = FALSE) #this will make none of the code appear unless we ask it to.
+library(ggplot2)
+library(VIM)
+library(Metrics)
+library(reshape2)
+library(scales)
+library(fastDummies)
+library(kableExtra)
+library(glmnet)
+library(tidyr)
+library(forcats)
+library(knitr)
+library(car)
+library(pls)
+library(lars)
+library(lubridate)
+#library(corrplot)
+#library(ggfortify)
+library(MASS)
+library(caret)
+library(magrittr)
+library(gridExtra)
+library(dplyr)
+
+```
+![](snoImage.png)
+
+\vspace{2cm} 
+\begin{center}
+\huge \textbf{UNIVERSITY OF OKLAHOMA} \\[2ex]
+\LARGE\textbf{DSA/ISE 5103 – INTELLIGENT DATA ANALYTICS}\\[4ex]
+
+\huge \textbf{Project: SnOasis} \\[4ex]
+
+\Large \textbf{Nicholas Jacob, Yechang Qi, James Wahome, Zayne Mclaughlin} \\[4ex]
+\LARGE \textbf{Course Project Group 6} \\[10ex]
+
+\LARGE \textbf{2024-10-21}\\[1ex]
+\end{center}
+
+\newpage
+
+# Initial Data Analysis
+
+Our dataset needs some cleaning before analysis. Although we don't have missing values thanks to our real-time recording system, we still need to handle a few things. First, we'll deal with outliers, specifically negative values in Quantity or Final Price that show returns or corrections. We'll find and remove these transactions along with their original entries. We'll also check if any unusually high prices or quantities need to be capped. Next, we'll properly format our category data like Staff, Location, and Product Names for analysis, possibly grouping similar products together to keep things simple. Finally, we'll clean up our date and time information, fixing any weird symbols and adding useful details like day of the week and hour of day.
+
+```{r dataload}
+df = read.csv("https://github.com/nurfnick/SnOasis/raw/refs/heads/main/snoasisData.csv")
+tail(df)
+```
+```{r}
+#Time needs to be cleaned up.  Made it into datetime.
+df$dt <- make_datetime(year(mdy(df$Date)), 
+              month(mdy(df$Date)),
+              day(mdy(df$Date)),
+              hour(hms(df$Time)),
+              minute(hms(df$Time)))
+# Remove '?' from Time column
+df$Time <- gsub("\\?", "", df$Time)
+```
+
+
+```{r}
+dfNumeric <- df %>% 
+  dplyr::select(where(is.numeric))
+glimpse(dfNumeric)
+dfNumeric <- dfNumeric %>%
+  rename(
+    Receipt_number = `Receipt.number`,
+    Quantity = Quantity,  # this one stays the same
+    Price = `Price..USD.`,
+    Discount = `Discount..USD.`,
+    Subtotal = `Subtotal..USD.`,
+    Total_tax = `Total.tax.collected..USD.`,
+    Final_price = `Final.price..USD.`,
+    Cost_price = `Cost.price`
+  )
+```
+```{r}
+dfFactor <- df %>% 
+  dplyr::select(where(is.character))%>%
+  mutate_all(factor)
+glimpse(dfFactor)
+dfFactor <- dfFactor %>%
+  rename(
+    Tax_info = Tax.Info.Available,
+    Tax_exempt = Is.Tax.Exempt
+  )
+
+```
+
+```{r}
+Q1<-function(x,na.rm=TRUE) {
+quantile(x,na.rm=na.rm)[2]
+}
+Q3<-function(x,na.rm=TRUE) {
+quantile(x,na.rm=na.rm)[4]
+}
+```
+
+```{r}
+myNumericSummary <- function(x){
+  c(length(x), n_distinct(x), sum(is.na(x)), mean(x, na.rm=TRUE),
+  min(x,na.rm=TRUE), Q1(x,na.rm=TRUE), median(x,na.rm=TRUE), Q3(x,na.rm=TRUE),
+  max(x,na.rm=TRUE), sd(x,na.rm=TRUE))
+}
+```
+
+```{r}
+# Summary function
+numericSummary <- dfNumeric %>%
+  summarise_all(myNumericSummary) %>%
+  # Adding descriptive statistics to the numeric summary table
+  cbind(stat = c("n", "unique", "missing", "mean", "min", "Q1", "median", "Q3", "max",
+                 "sd")) %>%
+
+  tidyr::pivot_longer(cols = "Receipt_number":"Cost_price", names_to = "variable", 
+                      values_to = "value") %>%
+  tidyr::pivot_wider(names_from = stat, values_from = value) %>%
+  dplyr::mutate(
+    missing_pct = 100 * missing / n,
+    unique_pct = 100 * unique / n
+  ) %>%
+  # Selecting and ordering columns
+  dplyr::select(variable, n, missing, missing_pct, unique, unique_pct, everything())
+
+# Limiting the number of digits in the table and using scientific notation
+options(digits = 2, scipen = 0)
+```
+
+```{r, include = TRUE, fig.pos = "H"}
+# Display the Descriptive Summary of Numeric Variables
+numericSummary %>%  
+  kable(digits = 2, format = "latex", booktabs = TRUE, 
+        caption = "Descriptive Summary of Numeric Variables") %>%
+  kable_styling(font_size = 12,latex_options = c("H", "scale_down")) %>%
+  row_spec(0, bold = TRUE) %>% 
+  row_spec(1:nrow(numericSummary), extra_latex_after = "\\addlinespace[0.5em]")
+```
+
+```{r}
+# Function to get the mode
+getmode <- function(v) {
+  tbl <- table(v)
+  return(names(which.max(tbl)))  # 1st mode
+}
+
+# Function to get the mode frequency
+getmodeCnt <- function(v) {
+  tbl <- table(v)
+  return(max(tbl))  # 1st mode frequency
+}
+```
+
+```{r}
+# Define categorical summary function
+myCategoricalSummary <- function(x) {
+  c(
+    length(x),
+    sum(is.na(x)),
+    n_distinct(x),
+    getmode(x), getmodeCnt(x)
+  )
+}
+
+# Apply the categorical summary function to all factors in trainFactor
+factorSummary <- dfFactor %>%
+  summarise_all(myCategoricalSummary)
+
+# Add column titles to the factorSummary table
+factorSummary <- cbind(
+  stat = c("n", "missing", "unique", "mode", "mode_freq"),
+  factorSummary
+)
+
+# Reshape the data and calculate percentages for missing and unique values
+factorSummaryFinal <- factorSummary %>%
+  tidyr::pivot_longer(cols = "Date":"Tax_exempt", 
+                      names_to = "variable", values_to = "value") %>%
+  tidyr::pivot_wider(names_from = stat, values_from = value) %>%
+  dplyr::mutate(
+    missing_pct = 100 * as.numeric(missing) / as.numeric(n),  # Calculate missing percentage
+    unique_pct = 100 * as.numeric(unique) / as.numeric(n),  
+  ) %>%
+  dplyr::select(variable, n, missing, missing_pct, unique, unique_pct, everything())
+# Set display options for precision and formatting
+options(digits = 3, scipen = 99)
+```
+
+```{r ,include = TRUE, fig.pos = "H"}
+# Display the final summary table with kable
+factorSummaryFinal %>% 
+  kable(digits = 2, format = "latex", booktabs = TRUE, 
+        caption = "Descriptive Summary of Categorical Variables") %>%
+  kable_styling(font_size = 7,latex_options = c("H")) %>%
+  row_spec(0, bold = TRUE) %>%  # Make header bold
+  row_spec(1:nrow(factorSummaryFinal), extra_latex_after = "\\addlinespace[0.25em]")
+```
+
+
+# Visualizations
+```{r,include = TRUE, fig.height=4}
+# First plot: Sales by Hour
+p1 <- df %>%
+  mutate(hour = factor(hour(dt), levels = c(9,10,11,12,1,2,3,4,5,6,7,8))) %>%
+  ggplot(aes(x = hour)) +
+  geom_bar() +
+  labs(title = "Sales by Hour") +
+  theme_minimal()  # Adds a white background
+
+# Second plot: Sales by Weekday
+df$weekdays <- factor(weekdays(df$dt), 
+                      levels = c("Sunday", "Monday", "Tuesday", "Wednesday", 
+                                 "Thursday", "Friday", "Saturday"))
+
+p2 <- df %>%
+  ggplot(aes(x = weekdays)) +
+  geom_bar() +
+  labs(title = "Sales by Weekday") +
+  theme_minimal()  # Adds a white background
+
+# Third plot: Sales by Month
+p3 <- df %>% 
+  mutate(month = factor(month(dt, label = TRUE, abbr = TRUE),
+                        levels = month.abb)) %>%
+  ggplot(aes(x = month)) +
+  geom_bar() +
+  labs(title = "Sales by Month") +
+  theme_minimal()  # Adds a white background
+
+# Combine the three plots into one figure
+library(gridExtra)
+grid.arrange(p1, p2, p3, ncol = 1)
+```
+
+The Sales by Hour plot shows a peak in sales between 2:00 AM and 4:00 AM, indicating that most transactions occur during these early morning hours. The Sales by Weekday plot reveals consistent sales across the week, with only a slight dip on Sundays, suggesting steady demand without a strong weekday or weekend effect. The Sales by Month plot highlights higher sales from April to July, followed by a decline from August to October, hinting at seasonal trends with peak activity in spring and early summer and a slower period in late summer.
+
+```{r,include = TRUE, fig.height=3}
+df %>%
+  group_by(Name) %>%
+  summarise(Total_Sales = sum(Final.price..USD., na.rm=TRUE)) %>%
+  arrange(desc(Total_Sales)) %>%
+  head(10) %>%
+  ggplot(aes(x = reorder(Name, Total_Sales), y = Total_Sales)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  labs(title = "Top 10 Best-Selling Products", x = "Product Name", y = "Total Sales (USD)") +
+  theme_minimal() 
+```
+This chart shows that the highest-grossing products at SnOasis are primarily size options, with "Medium," "Small," and "Large" leading in total sales. Size variations dominate the top 10, indicating they are the most popular choices among customers. Additionally, add-ons like "Lime" and "Cream" and specialized items like "S M L Salty Dog Charge" and "Pup Cup" contribute significantly to sales. This suggests that offering a variety of sizes and add-ons is key to driving revenue at SnOasis.
+
+
+```{r include = TRUE, fig.height=3}
+df %>%
+  mutate(
+    # Convert weekdays to an ordered factor to maintain consistent weekday order on the x-axis
+    weekdays = factor(weekdays(dt), 
+                      levels = c("Sunday", "Monday", "Tuesday", "Wednesday", 
+                                 "Thursday", "Friday", "Saturday"))
+  ) %>%
+  ggplot(aes(x = weekdays, y = Final.price..USD.)) +
+  # Create a box plot for sales (final price) by each weekday
+  geom_boxplot(fill = "skyblue", color = "darkblue", outlier.color = "red") +
+  # Add titles and labels for clarity
+  labs(title = "Distribution of Sales by Weekday", 
+       x = "Weekday", 
+       y = "Final Price (USD)") +
+  # Use a minimal theme for a clean look
+  theme_minimal()
+```
+
+The Distribution of Sales by Weekday plot shows that the majority of sales prices are relatively low and consistent across all days, as indicated by the compact boxplots near the bottom. However, there are some high-price outliers (marked by red dots) each day, with the highest outlier reaching around $120. This suggests that while typical sales amounts are stable throughout the week, occasional high-value transactions occur randomly across all days.
+ 
+```{r include = TRUE}
+df %>%
+  filter(Name != "" & Name != "5.31") %>%  # Exclude blank and "5.31" product names
+  ggplot(aes(x = Name, y = Price..USD.)) +
+  geom_boxplot(fill = "skyblue", color = "darkblue", outlier.color = "red", outlier.size = 1) +  # Set the size of the outliers (dots) to make them smaller
+  labs(title = "Distribution of Sales by Product", 
+       x = "Product Name", 
+       y = "Price (USD)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+This plot, showing the Distribution of Sales by Product, illustrates the variation in sales prices across different products. Most products have a narrow price range clustered near the bottom of the plot, indicating relatively low and consistent prices. However, there are a few products with a wider range and several high-price outliers (indicated by red dots) — for example, products like "Gift Card," "Large," "Kiddie," and "Skittles" have higher price variability and occasional outliers reaching above $25. This suggests that while most items are low-cost, a few products are occasionally sold at higher prices, possibly due to different sizes, premium options, or special product variations.
+
+```{r include = TRUE, fig.height=3.5}
+df %>%
+  mutate(
+    # Convert hour and weekday into factors for better control in the plot
+    hour = factor(hour(dt)),
+    weekdays = factor(weekdays(dt), 
+                      levels = c("Sunday", "Monday", "Tuesday", "Wednesday", 
+                                 "Thursday", "Friday", "Saturday"))
+  ) %>%
+  # Group data by each combination of weekday and hour to calculate average sales
+  group_by(weekdays, hour) %>%
+  summarize(avg_sales = mean(Final.price..USD., na.rm = TRUE)) %>%
+  # Plot heatmap with hour on the x-axis and weekday on the y-axis
+  ggplot(aes(x = hour, y = weekdays, fill = avg_sales)) +
+  # Use a tile geometry for the heatmap and set color gradient for average sales
+  geom_tile(color = "white") +
+  # Color gradient from light yellow to dark red, showing lower to higher sales
+  scale_fill_gradient(low = "lightyellow", high = "darkred") +
+  # Add titles and labels for the heatmap
+  labs(title = "Average Sales by Hour and Day", 
+       x = "Hour", 
+       y = "Weekday", 
+       fill = "Avg Sales (USD)") +
+  # Minimal theme for a cleaner appearance
+  theme_minimal()
+```
+The heatmap shows that average sales are generally consistent but low across most days and hours, with one noticeable peak on Friday around 9:00 AM. Sunday has the lowest average sales, especially in the early morning hours. This suggests that SnOasis could focus promotions or staffing on the Friday morning peak and consider adjusting resources for lower-demand times, particularly on Sundays.
+
+```{r include = TRUE, fig.height=3.5}
+df %>%
+  mutate(
+    # Convert hour and weekday into factors for better control in the plot
+    hour = factor(hour(dt)),
+    weekdays = factor(weekdays(dt), 
+                      levels = c("Sunday", "Monday", "Tuesday", "Wednesday", 
+                                 "Thursday", "Friday", "Saturday"))
+  ) %>%
+  # Group data by each combination of weekday and hour to calculate average sales
+  group_by(weekdays, hour) %>%
+  summarize(total_sales = sum(Final.price..USD., na.rm = TRUE)) %>%
+  # Plot heatmap with hour on the x-axis and weekday on the y-axis
+  ggplot(aes(x = hour, y = weekdays, fill = total_sales)) +
+  # Use a tile geometry for the heatmap and set color gradient for average sales
+  geom_tile(color = "white") +
+  # Color gradient from light yellow to dark red, showing lower to higher sales
+  scale_fill_gradient(low = "lightyellow", high = "darkred") +
+  # Add titles and labels for the heatmap
+  labs(title = "Total Sales by Hour and Day", 
+       x = "Hour", 
+       y = "Weekday", 
+       fill = "Total Sales (USD)") +
+  # Minimal theme for a cleaner appearance
+  theme_minimal()
+```
+The pattern indicates that sales are concentrated in the early morning hours, peaking around 2:00 to 5:00 AM across most days, particularly from Friday through Sunday. Sales decrease significantly after 7:00 AM and remain low throughout the late morning. This suggests that SnOasis experiences its busiest periods in the early morning hours on weekends, which could inform staffing and inventory decisions for these peak times.
+ 
+
+```{r}
+#I want to group the data by 10 minute chunks so that I can accurately predict how to allocate workers. 
+dfBy10min <-df %>%
+  group_by(group10min = cut(dt, "10 min"),Staff) %>%
+  summarize(names = list(unique(Name)),totalSales = sum(Final.price..USD.)) %>%
+  ungroup()
+  #summarize(totalSales = sum(Final.price..USD.)) %>%
+  
+```
+
+```{r}
+dfBy10min$names[1000]
+```
+
+\newpage
+# Appendix: Data quality report
+```{r,include = TRUE}
+glimpse(dfNumeric)
+glimpse(dfFactor)
+```
+
+# Variable explanation for “SnOasis” file：
+
+
+- **Date**: The date of the transaction, formatted as MM/DD/YYYY.
+
+- **Time**: The time of the transaction, indicating when the sale was processed (e.g., 7:50:56 PM).
+
+- **Staff**: Identifier for the staff member or location (e.g., "SnOasis Main" or "SnOasis East") that processed the transaction.
+
+- **Receipt number**: Unique identifier for each transaction, acting as a receipt or transaction ID.
+
+- **Name**: Name of the item sold (e.g., "Gift card," "Candy Bar").
+
+- **Variant**: Any specific variation of the item (this field appears mostly blank).
+
+- **Unit**: Likely denotes unit type or measurement, though it's mostly empty here.
+
+- **Quantity**: The number of units sold in the transaction.
+
+- **Price (USD)**: Price per unit in USD before any discounts.
+
+- **Discount (USD)**: Discount applied to the item in USD.
+
+- **Subtotal (USD)**: Total amount before tax, accounting for any discounts.
+
+- **Tax Info Available**: Indicates if tax information is available (e.g., "Yes" or "No").
+
+- **Is Tax Exempt**: Whether the transaction is exempt from taxes (e.g., "Yes" or "No").
+
+- **Total tax collected (USD)**: Amount of tax collected in USD for the transaction.
+
+- **Final price (USD)**: Total amount paid after taxes and discounts.
+
+- **SKU**: Stock-keeping unit identifier for the item, a unique code for tracking inventory.
+
+- **Barcode**: Barcode of the item, for scanning purposes (appears mostly empty).
+
+- **Cost price**: Cost price for the item, representing the cost to the business (appears mostly zero here).
+
+- **Comment**: Field for any additional notes or comments about the transaction.
+
+```{r,include = TRUE}
+df_sale = read.csv("SnOasisSaleDates.csv")
+df_sale <- df_sale %>%
+  rename(
+    Time_of_Sale = `Time.of.Sale`,
+    Sale_Description = `Sale.Description`,
+    Location_of_Sale = `Location.of.Sale`
+  )
+glimpse(df_sale)
+```
+# Variable explanation for “SnOasisSale” file：
+
+- **Day**: The specific date of the sale event, formatted as MM/DD/YYYY.
+
+- **Sale Description**: A detailed description of the sale event, including any promotional offers or special deals (e.g., "Buy 1 get 1 free" or "Free Toppings").
+
+- **Time of Sale**: The timeframe during which the sale event is active (e.g., "11 AM - 1 PM" or "All day").
+
+- **Location of Sale**: Specifies the location of the sale event, such as "Mobile Trailer," "East," or "Main."
