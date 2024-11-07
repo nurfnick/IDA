@@ -18,6 +18,7 @@ library(forcats)
 library(kableExtra)
 library(gmodels)
 library(pROC)
+library(ROCR)
 # Load the dataset
 train <- read.csv("hm7-Train-2024.csv", encoding = "latin1")
 
@@ -91,7 +92,8 @@ Looking at Table 1, we see a few missing values for indicators.  These will not 
 ```{r}
 trainNumeric <- trainNumeric %>%
   mutate_all(~replace(.,is.na(.),0)) %>%
-  select(-c(indicator_2_level,readmitted, admission_type, admission_source, discharge_disposition))
+  select(-c(indicator_2_level,readmitted, admission_type, admission_source, discharge_disposition))%>%
+  mutate_all(~scale(.))
 ```
 ```{r}
 # Function to get mode, 2nd mode, and least common mode
@@ -212,7 +214,7 @@ names(trainFactor)
 
 tried and did not give good results: age, diagnosis, gender
 
-```{r}
+```{r, include = TRUE}
 trainCombined <- bind_cols(trainNumeric,
                            readmitted = trainFactor$readmitted, 
                            insulin = trainFactor$insulin,
@@ -228,7 +230,15 @@ fitglm <- glm(data = trainCombined,
     family = binomial )
 summary(fitglm)
 ```
-```{r creating test}
+Looking at these results, we see lots of interesting characteristics.  
+
+1.  `payer_code`:  While payer code appears significant, the added values to the probability of readmission are very similar.  However we should be aware of the levels, `r levels(trainFactor$payer_code)`.  But the one held out, insurance, is the one we need to pay attention to.  We see here that if the patient is insured, they will be much less likely, (on the order of ~20%) readmitted.
+
+2. `race`:  Race is significant at all levels.  Again, we look at the levels,  `r levels(trainFactor$race)`.  We see here that African American is used as the baseline and all other races give a negative effect to readmission while being Caucasian give a slight positive effect.  This is curious and should be explored further as one does not expect skin color to change healthcare.  
+
+3. `number_inpatient`:  Lastly, we see that the number of previous trips to the hospital give a strong indication of readmission.  Of course this is expected as the patient is clearly sicker and has required multiple previous visits to the hospital.
+
+```{r creating test, eval = FALSE}
 dftest <- read.csv("hm7-Test-2024.csv", encoding = "latin1")
 
 
@@ -274,11 +284,21 @@ write.csv(output, "nicksResult.csv",row.names = FALSE)
 pred <- predict(fitglm, type = "response", newdata = trainCombined)
 roc.curve<- roc(trainCombined$readmitted,pred, ci = T)
 plot(roc.curve)
+title("ROC Chart")
 ```
+```{r, include = TRUE}
+rocr_pred_test <- prediction(pred,trainCombined$readmitted)
+perf <- performance(rocr_pred_test, "lift","rpp")
+plot(perf, main = "Lift Curve")
+```
+
+
 ```{r, include = TRUE}
 threshold <- 0.5
 confusionMatrix(factor(pred >threshold),factor(trainCombined$readmitted==1),positive = "TRUE")
 ```
+Here we have included our three metrics of the logistic regression.  We have created the ROC chart, it shows us that we can identify the patients more likely of a readmitted above the random guess.  We see the percentage that we have correctly captured.  The lift chart shows us the ratio of the cumulative percent captured by using the model to the percentage that would happen with just random chance.  Lastly we include the confusion matrix and all it's outputs.  We see are values of correct identifiers and the false positives and false negatives.
+
 ```{r}
 fitControl <- trainControl(method = "cv",
                            number = 5)
@@ -331,8 +351,8 @@ svmcv <- train(readmitted ~ .-patientID, data = trainSVM,
 svmcv
 #I could never get this code to run on my machine...
 ```
-```{r, eval = FALSE}
-knnGrid <- expand.grid(k = seq(1,10,length = 2))
+```{r}
+knnGrid <- expand.grid(k = 15)
 trainSVM <- bind_cols(trainNumeric,readmitted = trainFactor$readmitted)
 
 knncv <- train(readmitted ~ .-patientID, data = trainSVM,
@@ -340,10 +360,10 @@ knncv <- train(readmitted ~ .-patientID, data = trainSVM,
                #trControl = fitControl,
                metric = "Accuracy",
                tuneGrid = knnGrid)
-library(class)
-knn(trainCombined,trainNumeric,cl = trainFactor$readmitted, k = 5, prob = TRUE)
 
-knncv
+
+
+
 
 ```
 ```{r, include = TRUE, echo = FALSE}
@@ -380,3 +400,6 @@ trainFactor <- train %>%
 |ridge (logreg)|glmnet|glmnet|lambda|`r glmnetcv$bestTune$lambda`|`r mean(glmnetcv$results$Accuracy)`|`r mean(glmnetcv$results$Kappa)`|
 |lasso|glmnet|glmnet|lambda|`r glmnetlassocv$bestTune$lambda`|`r mean(glmnetlassocv$results$Accuracy)`|`r mean(glmnetlassocv$results$Kappa)`|
 |decision tree|rpart|rpart|cp|`r rpartcv$bestTune$cp`|`r mean(rpartcv$results$Accuracy)`|`r mean(rpartcv$results$Kappa)`|
+|nearest neighbors|knn|class|k|`r knncv$bestTune$k`|`r mean(knncv$results$Accuracy)`|`r mean(knncv$results$Kappa)`|
+
+All models seem very similar.  Not seeing much difference between the models, we selected the simplest to examine.
