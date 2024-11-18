@@ -117,6 +117,7 @@ table(dfKM6$cluster, df$quality)
 Both the visualization and the table show me little to expect that this arbitrary fixing at 6 levels is appropriate.  Therefore I have left it at 3.
 
 
+
 Next, I look at hierarchical clustering.  We see the tree assignments.  Cutting at 6 for the differing levels of quality of wine, I can not interpret if the clustering method has returned any indication of quality.
 
 ```{r, include = TRUE}
