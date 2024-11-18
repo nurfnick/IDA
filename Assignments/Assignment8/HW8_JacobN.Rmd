@@ -8,7 +8,7 @@ output: pdf_document
 
 
 ```{r setup, include = FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = FALSE)
 knitr::opts_chunk$set(warning = FALSE, message = FALSE)
 knitr::opts_chunk$set(include = FALSE) #this will make none of the code appear unless we ask it to.
 library(ggplot2)
@@ -33,6 +33,10 @@ library(car)
 library(pls)
 library(lars)
 library(lubridate)
+library(cluster)    #provides more cluster algorithms than base R (e.g. PAM)
+library(useful)     #provides a plot function for clusters and "FitKMeans" and "PlotHartigan" functions
+library(NbClust)  
+library(dbscan)
 ```
 # Wine Quality Reds
 
@@ -44,616 +48,132 @@ The wine quality dataset came from the UCI Machine Learning Repository linked di
 
 ```{r}
 
-dfScaled<-scale(df[,!(names(df) %in% c('quality'))])#default is mean centering with scaling by standard deviation
+dfScaled<-scale(df[,!(names(df) %in% c('quality'))])
 
 
-#kmeans is a function in the standard R package "stats"
-dfKM <- kmeans(dfScaled,3, nstart=10)  
+dfKM <- kmeans(dfScaled,3, nstart=20)  
+```
+
+I removed the quality from the data before running it through the cluster analysis.  I ran `kmeans` with several starts but it always went to `r dfKM$iter`.  While I was expecting 10 because of the quality.  
+
+This graph here uses the two qualities of wine I am most familiar with, sulfates and alcohol.
+
+```{r, include = TRUE}
+ggplot(data = df, aes(x = sulphates, y = alcohol, colour = factor(dfKM$cluster), shape = factor(quality)))+
+  geom_point() +
+  labs(title = "KNN Means Cluster",colour = "Cluster", shape = "Quality")
+
+```
+```{r, include = TRUE}
+wssplot <- function(data, nc=15){                    
+
+  par(mfrow=c(1,2))
+  
+  wss <- NULL  
+  pctExp <-NULL
+  
+  for (k in 1:nc)
+  {
+     kclus <- kmeans(data, centers=k)
+     wss[k] <- kclus$tot.withinss      #store the total within SSE for given k
+     pctExp[k] <- 1-wss[k]/kclus$totss
+  }
+  
+  plot(1:nc, wss, type="b", xlab="Number of Clusters",
+       ylab="Within groups sum of squares")
+
+  plot(1:nc, pctExp, type="b", xlab="Number of Clusters",
+       ylab="Pct Explained")
+  
+  par(mfrow=c(1,1))
+}
+
+
+wssplot(dfScaled,nc=30)
+```
+
+Utilizing the graphic from the lecture notes, we do not note a sharp elbow in either of the graphics looking at the knn-means.  We look at a few more approaches. 
+
+```{r, include = TRUE}
+clusFit<-FitKMeans(dfScaled,max.clusters=30,nstart=20)   #evaluates k using the "Hartigan" rule
+
+PlotHartigan(clusFit)
+
+```
+
+We see that by following Hartigan's Rule, we end up with some overfitted model.  I am not surprised having had a friend study for his sommelier.  It was a great summer to be around his house, always excellent bottles on hand.  I could never tell the difference between good and excellent but was a happy drinking partner.
+
+Lastly, I examine the plot overloaded function available in `useful` library.  With PCA we do see how the clusters were chosen if not what we had hoped for.
+
+```{r, include = TRUE}
+plot(dfKM,data=dfScaled) 
+```
+I'll fit with 6 clusters also just to see what that looks like just to satisfy my curiosity on what we expect the fit to be.
+```{r, include = TRUE}
+dfKM6 = kmeans(dfScaled,6)
+plot(dfKM6,data=dfScaled) 
+table(dfKM6$cluster, df$quality)
+```
+Both the visualization and the table show me little to expect that this arbitrary fixing at 6 levels is appropriate.  Therefore I have left it at 3.
+
+
+Next, I look at hierarchical clustering.  We see the tree assignments.  Cutting at 6 for the differing levels of quality of wine, I can not interpret if the clustering method has returned any indication of quality.
+
+```{r, include = TRUE}
+di <- dist(dfScaled, method="euclidean")   # with hiearchical clustering, only need distance matrix
+
+hc <- hclust(di, method="ward.D")
+#plot(hc, labels=FALSE)
+
+df$hcluster <- as.factor(cutree(hc, k=6))   
+
+#and a quick check to see how our 'natural clusters' align with the species data
+table( df$quality, df$hcluster)
 ```
 
 ```{r, include = TRUE}
-p<-qplot(data=df, x=sulphates, y=alcohol, color=factor(dfKM$cluster))  #plot the 2 variables and the cluster color
-g <- guide_legend("Cluster")                  #retitle the legend...
-p + guides(color = g, size = g, shape = g)    #retitle the legend...
+ggplot(data = df, aes(x = sulphates, y = alcohol, colour = factor(hcluster), shape = factor(quality)))+
+  geom_point() +
+  labs(title = "Hierarchical Cluster",colour = "Cluster", shape = "Quality")
 ```
 
-```{r}
-trainFactor <- train %>% 
-  dplyr::select(where(is.character))%>% ##|where(is.logical) )%>%
-  mutate_all(na_if,"")%>%
-  mutate_all(factor)
-  #mutate_all(fct_na_value_to_level) 
-glimpse(trainFactor)
-```
-
-```{r}
-Q1<-function(x,na.rm=TRUE) {
-quantile(x,na.rm=na.rm)[2]
-}
-Q3<-function(x,na.rm=TRUE) {
-quantile(x,na.rm=na.rm)[4]
-}
+Perhaps the cutting at 6 was arbitrary?  We repeat with more, 19 seemed to work best.
+  
+```{r, include = TRUE}
+df$hcluster <- as.factor(cutree(hc, k=19))  
+table( df$quality, df$hcluster)
 ```
 
 
-```{r}
-myNumericSummary <- function(x){
-  c(length(x), n_distinct(x), sum(is.na(x)), mean(x, na.rm=TRUE),
-  min(x,na.rm=TRUE), Q1(x,na.rm=TRUE), median(x,na.rm=TRUE), Q3(x,na.rm=TRUE),
-  max(x,na.rm=TRUE), sd(x,na.rm=TRUE))
-}
+
+
+Lastly, I attempt `dbscan`.  I tweaked the parameters of `eps` and `minPts` a bit but was never truly satisfied that most would find clusters.  I included the output from this method because I found it condescending as I was tuning.
+
+```{r, include = TRUE}
+dbScanOut <- dbscan(dfScaled, eps =  1, minPts = 10)
+dbScanOut
 ```
 
+Next, I recreate the graph I started with with the new dbscan clustering.
 
-```{r}
-
-# Summary function (assuming you have defined `myNumericSummary` elsewhere in your code)
-numericSummary <- trainNumeric %>%
-  summarise_all(myNumericSummary) %>%
-  # Adding descriptive statistics to the numeric summary table
-  cbind(stat = c("n", "unique", "missing", "mean", "min", "Q1", "median", "Q3", "max",
-                 "sd")) %>%
-  # Pivoting the numeric summary table for readability and adding percentage calculations
-  tidyr::pivot_longer(cols = "sessionId":"targetRevenue", names_to = "variable", 
-                      values_to = "value") %>%
-  tidyr::pivot_wider(names_from = stat, values_from = value) %>%
-  dplyr::mutate(
-    missing_pct = 100 * missing / n,
-    unique_pct = 100 * unique / n
-  ) %>%
-  # Selecting and ordering columns
-  dplyr::select(variable, n, missing, missing_pct, unique, unique_pct, everything())
-
-# Limiting the number of digits in the table and using scientific notation
-options(digits = 2, scipen = 0)
+```{r, include = TRUE}
+ggplot(data = df, aes(x = sulphates, y = alcohol, colour = factor(dbScanOut$cluster), shape = factor(quality)))+
+  geom_point() +
+  labs(title = "DBScan Cluster",colour = "Cluster", shape = "Quality")
 ```
 
+I see no obvious clusters here.  
 
-```{r, include = TRUE, fig.pos = "H"}
-# Display the Descriptive Summary of Numeric Variables
-numericSummary %>%  
-  kable(digits = 2, format = "latex", booktabs = TRUE, 
-        caption = "Descriptive Summary of Numeric Variables") %>%
-  kable_styling(font_size = 12,latex_options = c("H", "scale_down")) %>%
-  row_spec(0, bold = TRUE) %>% # Make header bold
-  row_spec(1:nrow(numericSummary), extra_latex_after = "\\addlinespace[0.5em]")
-```
 
-Table 1 provides a Descriptive Summary of Numeric Variables in the dataset. Some variables, like adwordsClickInfo.page, have a high percentage of missing data (97.42%).  The median revenue is 0, indicating that many customers may not generate revenue.
 
-\newpage
-```{r}
-# Function to get mode, 2nd mode, and least common mode
-getmodes <- function(v, type=1) {
-  tbl <- table(v)
-  if (type == 1) return(names(which.max(tbl)))  # 1st mode
-  if (type == -1) return(names(which.min(tbl)))  # Least common mode
-  if (type == 2 && length(tbl) > 1) {
-    m1 <- which.max(tbl)
-    return(names(which.max(tbl[-m1])))  # 2nd mode
-  }
-  return("NA")  # Default when no valid 2nd mode
-}
+Lastly, I will revisit kmeans and attempt to interpret the outputs.  We see a bit here how the principle components work to get the clusters but no real obvious patterns, hence all the trouble finding clusters in this data.  This is the best we can hope for!
 
-# Function to get mode frequency, 2nd mode frequency
-getmodesCnt <- function(v, type=1) {
-  tbl <- table(v)
-  if (type == 1) return(max(tbl))  # 1st mode frequency
-  if (type == 2 && length(tbl) > 1) {
-    m1 <- which.max(tbl)
-    return(max(tbl[-m1]))  # 2nd mode frequency
-  }
-  return(NA)  # Default when no valid 2nd mode frequency
-}
-```
 
-```{r}
-# Define categorical summary function
-myCategoricalSummary <- function(x) {
-  c(
-    length(x),
-    sum(is.na(x)),
-    n_distinct(x),
-    getmodes(x, 1), getmodesCnt(x, 1),
-    getmodes(x, 2), getmodesCnt(x, 2)
-  )
-}
 
-# Apply the categorical summary function to all factors in trainFactor
-factorSummary <- trainFactor %>%
-  summarise_all(myCategoricalSummary)
-
-# Add column titles to the factorSummary table
-factorSummary <- cbind(
-  stat = c("n", "missing", "unique", "1st mode", "first_mode_freq",
-           "2nd mode", "second_mode_freq"),
-  factorSummary
-)
-
-# Reshape the data and calculate percentages for missing and unique values
-factorSummaryFinal <- factorSummary %>%
-  tidyr::pivot_longer(cols = "date":"adwordsClickInfo.adNetworkType", 
-                      names_to = "variable", values_to = "value") %>%
-  tidyr::pivot_wider(names_from = stat, values_from = value) %>%
-  dplyr::mutate(
-    missing_pct = 100 * as.numeric(missing) / as.numeric(n),  # Calculate missing percentage
-    unique_pct = 100 * as.numeric(unique) / as.numeric(n),  
-    # Calculate unique percentage
-    freqRatio = as.numeric(first_mode_freq) / as.numeric(second_mode_freq)  
-    # Frequency ratio
-  ) %>%
-  dplyr::select(variable, n, missing, missing_pct, unique, unique_pct, freqRatio, everything())
-
-# Exclude specific columns (variables) from the final table
-factorSummaryFinal <- factorSummaryFinal %>%
-  dplyr::filter(!variable %in% c("referralPath", "adContent", 
-                                 "adwordsClickInfo.page", 
-                                 "adwordsClickInfo.slot", 
-  "adwordsClickInfo.gclId","adwordsClickInfo.adNetworkType"))
-
-# Set display options for precision and formatting
-options(digits = 3, scipen = 99)
-```
-
-```{r ,include = TRUE, fig.pos = "H"}
-# Display the final summary table with kable
-factorSummaryFinal %>% 
-  kable(digits = 2, format = "latex", booktabs = TRUE, 
-        caption = "Descriptive Summary of Categorical Variables") %>%
-  kable_styling(font_size = 12,latex_options = c("H", "scale_down")) %>%
-  row_spec(0, bold = TRUE) %>%  # Make header bold
-  row_spec(1:nrow(factorSummaryFinal), extra_latex_after = "\\addlinespace[0.25em]") 
+```{r, include = TRUE}
+clusInfo<-data.frame(dfKM$centers,dfKM$size)
+clusInfo
 
 ```
 
-Table 2 provides a Descriptive Summary of Categorical Variables in the dataset. We excluded variables such as referralPath, adContent, adwordsClickInfo.page, adwordsClickInfo.slot, adwordsClickInfo.gclId, and adwordsClickInfo.adNetworkType due to the high proportion of missing values and their limited relevance to the analysis. 
-
-Some variables, like metro, have a high percentage of missing data (70.19%). For variables like "browser", Chrome is the most dominant category, followed by Safari. Similarly, for "deviceCategory", most users are using desktop.
-
-\newpage
-
-```{r,include = TRUE,fig.width = 8, fig.height = 4}
-hist(train$targetRevenue, breaks = seq(0, 10, 1), 
-     main = "Distribution of Target Revenue", xlab = "Target Revenue", ylab = "Frequency")
-```
-The graph shows that most observations have a target revenue of 0, which causes a significant peak at 0 on the x-axis.
-```{r,include = TRUE,fig.width = 8, fig.height = 4}
-hist(train[train$targetRevenue>0,]$targetRevenue, breaks = seq(0,10,1), 
-     main = "Distribution of Positive Target Revenue", xlab = "Target Revenue", ylab = "Frequency")
-```
-After excluding the zero value, the graph shows that the distribution of positive income values is more even, with a peak near the middle of the revenue range.
-
-\newpage
-```{r visits-vs-revenue-plot,include = TRUE, fig.width = 8, fig.height = 5}
-# Scatter plot of number of visits vs. target revenue
-ggplot(train, aes(x = visitNumber, y = targetRevenue)) + 
-  geom_point(alpha = 0.5, color = "darkred") + 
-  labs(title = "Target Revenue vs. Number of Visits", 
-       x = "Number of Visits", y = "Target Revenue") +
-  theme_minimal() +
-  theme(plot.title = element_text(hjust = 0.5))
-
-
-```
-This scatter plot illustrates the relationship between the number of visits and the total revenue for customers. Most customers have a small number of visits and generate relatively low total revenue.  The outliers, those who visit more frequently or generate higher revenue, could indeed be considered high net value customers. These customers contribute significantly more to the business in terms of revenue despite being a smaller group.
-
-\newpage
-
-```{r , fig.width = 8, fig.height = 5}
-customer_revenue <- train %>%
-  group_by(custId) %>%
-  summarize(total_revenue = sum(revenue, na.rm = TRUE)) %>%
-  arrange(desc(total_revenue))  # Sort by revenue in descending order
-
-# Calculate cumulative revenue percentage
-customer_revenue <- customer_revenue %>%
-  mutate(cumulative_revenue = cumsum(total_revenue),
-         revenue_percentage = cumulative_revenue / sum(total_revenue) * 100)
-
-# Categorize customers into groups (top 10%, 20%, etc.)
-total_customers <- nrow(customer_revenue)
-customer_revenue <- customer_revenue %>%
-  mutate(percentile_group = ntile(row_number(), 100))  # Divide into 100 groups (deciles)
-
-# Summarize revenue contribution by group
-group_contribution <- customer_revenue %>%
-  group_by(percentile_group) %>%
-  summarize(group_total_revenue = sum(total_revenue),
-            group_percentage = group_total_revenue / sum(customer_revenue$total_revenue) * 100)
-group_contribution <- group_contribution %>%
-  arrange(desc(group_percentage)) %>%
-  mutate(group = ifelse(row_number() <= 5, paste("Group", row_number()), "Others")) %>%
-  group_by(group) %>%
-  summarize(group_total_revenue = sum(group_total_revenue),
-            group_percentage = sum(group_percentage))
-
-# Define the color palette for the top 5 groups and "Others"
-custom_colors <- c("#66C2A5", "#3288BD", "#ABDDA4", "#5E4FA2", "#41B6C4", "lightgray") 
-```
-
-```{r Pie,include = TRUE, fig.width = 8, fig.height = 5}
-# Create the pie chart, showing labels only for the top 5% and "Others"
-ggplot(group_contribution, aes(x = "", y = group_percentage, fill = group)) +
-  geom_bar(stat = "identity", width = 1) +  
-  coord_polar(theta = "y") +  
-  geom_text(aes(label = paste0(round(group_percentage, 1), "%")), 
-            position = position_stack(vjust = 0.5), size = 3) + 
-  scale_fill_manual(values = custom_colors) + 
-  labs(title = "Customer Contribution by Percentile Group (Top 5% + Others)",
-       fill = "Percentile") +
-  theme_void() +  # Clean look
-  theme(
-    plot.title = element_text(hjust = 0.5),
-    legend.key.size = unit(0.4, "cm"), 
-    legend.text = element_text(size = 8)  
-  )
-
-```
-
-This pie plot provides a clear understanding of how heavily the revenue relies on a few top customer groups, emphasizing the importance of focusing efforts on retaining and nurturing these high-value customers.
-
-\newpage
-```{r,include = TRUE}
-# Remove rows with NA
-train_numeric_NNA <- na.omit(trainNumeric)
-cor_matrix <- cor(train_numeric_NNA)
-par(mar = c(5, 5, 5, 5)) 
-# Create the heatmap
-heatmap(cor_matrix, Colv = NA, Rowv = NA,
-        scale = "none")  
-```
-
-The heatmap suggests that there are few strong correlations between the variables in the train dataset, meaning that most variables act fairly independently of each other.
-
-\newpage
-# (a) ii. Data preparation
-## Cleaning Datas
-
-```{r,include = TRUE}
-trainFactor <- train %>% 
-  dplyr::select(where(is.character))%>% ##|where(is.logical) )%>%
-  mutate_all(na_if,"")%>%
-  mutate_all(factor)%>%
-  mutate_all(fct_na_value_to_level) 
-trainNumeric <- train %>% 
-  dplyr::select(where(is.numeric))%>%
-  replace(is.na(.),0)
-train <- cbind(trainNumeric,trainFactor)
-```
-We replace missing values with zeros, ensuring that all features have valid values, allowing the model to learn from all the data without removing rows or variables.
-
-```{r,include = TRUE}
-# Remove outliers beyond 3 standard deviations
-train_ro <- train %>%
-  filter(abs(scale(targetRevenue)) < 3)
-```
-We decided to remove outliers beyond 3 standard deviations in our model because these extreme values may disproportionately skew the results and negatively impact the model's performance.
-
-```{r,include = TRUE}
-trainNumeric$nonZero <- as.factor(train$revenue>0)
-train$nonZero <- as.factor(train$revenue>0)
-```
-
-Identifying customers with non-zero revenue is essential because it helps separate the customers who made purchases from those who did not. This separation allows us to handle the two groups differently in the modeling process. We will focus regression models only on non-zero revenue cases first, then we will focus on all revenue cases.
-
-```{r,include = TRUE}
-
-trainFactor <- trainFactor %>%
-  mutate(month = as.factor(month(ymd(date))))
-```
-We want to add the month as a factor rather than just the date.  we find this is a better indicator of sales. Note we made it a factor, NOT a quantitative variable.
-
-
-# (a) iii. Modeling
-
-## Identifying The Zeros
-
-```{r,include = TRUE}
-trainControl <- trainControl(method="cv", number=5)
-metric <- "Accuracy"
-grid <- expand.grid(.k=seq(1,20,by=1))
-
-fit.knn <- train(nonZero~.-targetRevenue - revenue,#
-                 data=trainNumeric, method="lda",
-                 metric=metric ,
-                 trControl=trainControl#,
-                 #tuneGrid = grid
-                 )
-knn.k1 <- fit.knn$bestTune # keep this Initial k for testing with knn() function in next section
-print(fit.knn)
-```
-Once the zero's have been identified, not need to predict a value for those.  Can build the regression on just the values that are non-zero.
-
-```{r,include = TRUE}
-ldafit <- lda(nonZero~.,#
-                 data=trainNumeric %>% 
-                      select(-c("targetRevenue","revenue"))
-              )
-
-predNonZero <- predict(ldafit,trainNumeric)
-```
-Here is the OLS regression on the revenue that are non-zero:
-```{r,include = TRUE}
-lmod <- lm(revenue ~ ., 
-           data =trainNumeric%>%
-             select(-c("targetRevenue","nonZero"))%>%
-             filter(as.logical(predNonZero$class))
-          )
-
-plot(lmod)
-```
-
-```{r}
-names(train)
-```
-Here is the logistic regression on the revenue that are non-zero:
-```{r logistic Model,include = TRUE}
-glmfit <- glm(nonZero~.,
-              data = train %>%
-                select(-c("targetRevenue","revenue","adContent","adwordsClickInfo.page",
-                        "adwordsClickInfo.slot","adwordsClickInfo.gclId",
-                        "adwordsClickInfo.adNetworkType","adwordsClickInfo.slot",
-                        "country", "region","metro","city","networkDomain","topLevelDomain",
-                        "medium","campaign","keyword","referralPath","sessionId","custId",
-                        "date","source","channelGrouping","browser","operatingSystem"
-                        )
-                       ),#I need less variables to be computed this is maxing my working memory
-              family="binomial"
-              )
-```
-```{r}
-#plot(glmfit)
-summary(glmfit)
-```
-
-```{r,include = TRUE}
-predVal = predict(lmod,trainNumeric)
-rmse_value <- sqrt(mean((trainNumeric$revenue - predVal)^2))
-cat("RMSE: ", rmse_value, "\n")
-
-sst <- sum((trainNumeric$revenue - mean(trainNumeric$revenue))^2) 
-sse <- sum((trainNumeric$revenue - predVal)^2) 
-r2_value <- 1 - (sse / sst)
-cat("R-squared: ", r2_value, "\n")
-
-trainNumeric$predVal <- replace(predVal,!as.logical(predNonZero$class)|predVal <0,0)
-```
-```{r}
-trainNumeric <- trainNumeric %>%
-  group_by(custId)%>%
-  mutate(targetRevenuePred = log(sum(predVal)+1))%>%
-  ungroup()
-```
-
-```{r}
-any(is.na(trainNumeric$predVal))
-```
-
-Now, we turn to look at the revenue including 0. Here is the PLS model:
-```{r}
-# Load the dataset
-train <- read.csv("Train.csv", encoding = "latin1")
-
-# Ensure custId is a factor and revenue is numeric
-train$custId <- as.factor(train$custId)
-train$revenue <- as.numeric(train$revenue)
-
-# Create the target variable as the log of total revenue for each customer
-train <- train %>% 
-  dplyr::group_by(custId) %>%
-  dplyr::mutate(targetRevenue = log(sum(revenue, na.rm = TRUE) + 1)) %>%
-  dplyr::ungroup()
-# Select numeric columns for modeling, excluding irrelevant columns like `sessionId`
-trainNumeric <- train %>% 
-  dplyr::select(-revenue, -sessionId) %>%
-  dplyr::select(where(is.numeric))
-
-# Impute missing values with column means for numeric columns
-trainNumeric <- trainNumeric %>%
-  mutate(across(where(is.numeric), ~ ifelse(is.na(.), mean(., na.rm = TRUE), .)))
-
-# Remove zero variance columns (if any)
-zero_var_cols <- nearZeroVar(trainNumeric, saveMetrics = TRUE)
-zero_var_cols_to_remove <- rownames(zero_var_cols[zero_var_cols$zeroVar == TRUE, ])
-trainNumeric <- trainNumeric %>% select(-all_of(zero_var_cols_to_remove))
-
-# Check the resulting dataset
-str(trainNumeric)
-```
-```{r,include = TRUE}
-trainControl <- trainControl(method = "cv", number = 5)
-plsFit <- train(targetRevenue ~ ., data = trainNumeric, 
-                method = "pls", 
-                preProcess = c("center", "scale"), 
-                trControl = trainControl, 
-                tuneLength = 10)  
-print(plsFit)
-
-predictedValues <- predict(plsFit, newdata = trainNumeric)
-trainNumeric$predictedRevenue <- predictedValues
-
-ggplot(trainNumeric, aes(x = targetRevenue, y = predictedRevenue)) + 
-  geom_point(alpha = 0.6) +
-  geom_abline(intercept = 0, slope = 1, color = "red") +
-  labs(title = "PLS: Predicted vs Actual target Revenue", x = "Actual target Revenue (log)", y = "Predicted target Revenue (log)") +
-  theme_minimal()
-
-# Calculate RMSE and R² for training data predictions
-rmse <- sqrt(mean((trainNumeric$targetRevenue - trainNumeric$predictedRevenue)^2))
-r_squared <- cor(trainNumeric$targetRevenue, trainNumeric$predictedRevenue)^2
-
-cat("Training RMSE:", rmse, "\n")
-cat("Training R²:", r_squared, "\n")
-```
-
-
-Then, we transformed some categorical variables into dummy variables. We used lasso regression model to predict the target revenue. 
-```{r,include = TRUE}
-trainFactor <- train %>%
-  select(channelGrouping, browser, deviceCategory, subContinent, source)
-trainFactor_dummies <- model.matrix(~ . -1, data=trainFactor) %>%
-  as.data.frame()
-# Keep only selected categorical columns
-trainNumeric <- train %>% 
-  dplyr::select(where(is.numeric))
-train_full <- cbind(trainNumeric, trainFactor_dummies)%>%  
-  replace(is.na(.),0)
-```
-
-```{r,include = TRUE}
-X <- as.matrix(train_full %>% select(-targetRevenue,-revenue))  # Exclude the target variable
-y <- train_full$targetRevenue
-# Fit the LASSO model with cross-validation
-set.seed(2024)  
-lasso_glm_model <- cv.glmnet(X, y, alpha = 1, family = "gaussian", standardize = TRUE)
-
-print(lasso_glm_model$lambda.min)
-plot(lasso_glm_model)
-
-predictions <- predict(lasso_glm_model, newx = X, s = "lambda.min")
-predictions <- as.numeric(predictions)
-rmse_value <- rmse(y, predictions)
-cat("RMSE: ", rmse_value, "\n")
-SST <- sum((y - mean(y))^2)  # Total sum of squares
-SSE <- sum((y - predictions)^2)  # Sum of squared errors
-r2_value <- 1 - (SSE / SST)
-cat("R-squared: ", r2_value, "\n")
-```
-
-
-## Summary of Model Performance
-```{r,include = TRUE}
-df <- data.frame(
-  Model = c("OLS", "Logistic", "lasso", "PLS"),
-  Method = c("lm", "glm", "glmnet", "plsr"),
-  Package = c("stats", "stats", "glmnet", "pls"),
-  Hyperparameter = c("N/A", "N/A", "\\lambda", "ncomp"),
-  Value = c("N/A", "N/A", "0.0015", "6"),
-  RMSE = c("112", "N/A", "1.46", "1.18"),
-  R2 = c("-0.275", "N/A", "0.484", "0.664")
-)
-```
-```{r,include = TRUE}
-# Generate the table using kable
-kable(df, "latex", booktabs = TRUE, linesep = "",caption = "Summary of Model Performance") %>%
-  kable_styling(latex_options = c("hold_position"))
-```
-
-# (a) iv. Debrief
-No interaction terms or model stacking were used; just a clean LASSO regression model with properly prepared data.
-
-Data Preparation: Categorical data (like channelGrouping, browser, etc.) was converted into dummy variables so the model could work with them. Any missing data was replaced with 0 to avoid issues during modeling.
-
-LASSO Regression: We used LASSO regression, which is good for selecting important features and avoiding overfitting. Cross-validation helped find the best value of lambda, a key parameter that controls how much the model is regularized preventing it from being too complex or too simple.
-
-Model Performance: The model’s predictions were evaluated using two metrics:
-
-RMSE : This was 1.46, showing how far the predictions were from the true values on average.
-
-R-squared: The model explained 48.4% of the variance in the revenue data.
-
-Challenges: Converting categorical data and replacing missing values were the main challenges, but both were handled smoothly.
-
-
-\newpage 
-## (b) Creating an Output For Competition
-https://www.kaggle.com/competitions/2024-ise-dsa-5103-ida-hw-6/leaderboard
-```{r zeros}
-test = read.csv('Test.csv')
-
-cids = unique(test$custId)
-zeros = rep(0,length(cids))#I just made them all zero for a simplistic prediction
-```
-```{r simple lm with lda}
-testNumeric <- test %>% 
-  dplyr::select(where(is.numeric))%>%
-  replace(is.na(.),0)
-predNonZero <- predict(ldafit,testNumeric)
-predVal <- predict(lmod,testNumeric)
-
-testNumeric$predVal <- replace(predVal,!as.logical(predNonZero$class)|predVal <0,0)
-
-testNumeric <- testNumeric %>%
-  group_by(custId)%>%
-  mutate(targetRevenuePred = log(sum(predVal)+1))
-```
-
-```{r}
-slice <- testNumeric %>%
-  select(targetRevenuePred)%>%
-  summarise(n = mean(targetRevenuePred))
-
-slice
-```
-```{r}
-output <- cbind(custId = slice$custId, predRevenue = slice$n)
-write.csv(output, "nicksResult.csv",row.names = FALSE)
-```
-
-```{r lasso model}
-test = read.csv('Test.csv')
-
-# Separate numeric and factor data
-testFactor <- test %>%
-  dplyr::select(channelGrouping, browser, deviceCategory, subContinent, source)%>%  
-  mutate(across(everything(), ~ as.numeric(factor(.)))) 
-# Keep only selected categorical columns
-testNumeric <- test %>% dplyr::select(where(is.numeric))
-# Combine the encoded categorical data with the numeric data
-test_full <- cbind(testNumeric, testFactor)%>%
-  replace(is.na(.),0)
-
-# Align the columns of test_full with the training set
-missing_cols <- setdiff(colnames(X), colnames(test_full))
-test_full[missing_cols] <- 0  # Add missing columns as 0
-
-# Prepare the test predictor matrix again
-X_test <- as.matrix(test_full[, colnames(X)])  # Ensure column order matches training set
-
-# Predict on the test data using the LASSO-regularized GLM
-predicted_targetRevenue <- predict(lasso_glm_model, s = lasso_glm_model$lambda.min, newx = X_test)
-# Set negative predicted values to zero
-predicted_targetRevenue[predicted_targetRevenue < 0] <- 0
-
-# Prepare the output dataframe
-output <- data.frame(custId = test_full$custId, predicted_targetRevenue = predicted_targetRevenue)
-
-# Aggregate duplicated custId values by averaging the predicted target revenue
-output_aggregated <- aggregate(predicted_targetRevenue ~ custId, data = output, FUN = max)
-
-# Save the aggregated output to a CSV file
-write.csv(output_aggregated, "yechangResult.csv", row.names = FALSE)
-
-```
-
-```{r pls model}
-
-#Adding the test data
-test <- read.csv("Test.csv",encoding = "latin1" )
-
-
-testNumeric <- test %>% 
-  dplyr::select( -sessionId) %>%
-  dplyr::select(where(is.numeric))
-
-# Impute missing values with column means for numeric columns
-testNumeric <- testNumeric %>%
-  mutate(across(where(is.numeric), ~ ifelse(is.na(.), mean(., na.rm = TRUE), .)))
-
-# Remove zero variance columns (if any)
-testNumeric <- testNumeric %>% select(-all_of(zero_var_cols_to_remove))
-
-#make the prediction
-predictedValues <- predict(plsFit, newdata = testNumeric)
-testNumeric$predictedRevenue <- predictedValues
-
-#create the output
-testNumeric %>%
-  group_by(custId) %>%
-  mutate(predRevenue = mean(predictedRevenue)) %>%
-  mutate(predRevenue = ifelse(predRevenue<0, 0,predRevenue))%>%
-  select(c(custId,predRevenue)) %>%
-  distinct() %>%
-  write.csv("zayneResult.csv", row.names = FALSE)
-
-```
+We see the first group with high acidity and sulfates but low ph.  The second group has a high ph.  The last cluster has low alcohol and high sugars (in brewing this is a sign of not enough time fermenting).
