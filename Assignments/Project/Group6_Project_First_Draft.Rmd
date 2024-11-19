@@ -35,7 +35,8 @@ library(caret)
 library(magrittr)
 library(gridExtra)
 library(dplyr)
-
+library(stringr)
+library(arules)
 ```
 ![](snoImage.png)
 
@@ -355,21 +356,45 @@ df %>%
 ```
 The pattern indicates that sales are concentrated in the early morning hours, peaking around 2:00 to 5:00 AM across most days, particularly from Friday through Sunday. Sales decrease significantly after 7:00 AM and remain low throughout the late morning. This suggests that SnOasis experiences its busiest periods in the early morning hours on weekends, which could inform staffing and inventory decisions for these peak times.
  
+## Association on Sales
 
+I was curious to see if we could identify any association between the chunks of the day.  Could we predict that if someone bought a large that they would also get a medium and candy?  We utilize the `arules` package to examine this.
 ```{r}
 #I want to group the data by 10 minute chunks so that I can accurately predict how to allocate workers. 
 dfBy10min <-df %>%
   group_by(group10min = cut(dt, "10 min"),Staff) %>%
-  summarize(names = list(unique(Name)),totalSales = sum(Final.price..USD.)) %>%
+  summarize(names = list(unique(str_trim(Name))),totalSales = sum(Final.price..USD.)) %>%
   ungroup()
   #summarize(totalSales = sum(Final.price..USD.)) %>%
   
-```
+dfByTrans <- df %>%
+  group_by(Receipt.number) %>%
+  summarize(names = list(unique(str_trim(Name)))) %>%
+  ungroup()
 
+```
+With the data compiled at the transaction level, we examine the top 10 most common purchases, surprisingly large is below adding lime.
+
+```{r, include = TRUE}
+
+
+trans <- as(dfByTrans$names, "transactions")
+
+itemFrequencyPlot(trans, topN = 15)
+
+```
+Next we use this to predict consumer behavior.  
 ```{r}
-dfBy10min$names[1000]
+rules <- apriori(trans, 
+                 parameter = list(supp=0.05, conf=0.25, 
+                                  maxlen=10, 
+                                  minlen = 2,
+                                  target= "rules"))
 ```
-
+```{r, include = TRUE}
+inspect(rules)
+```
+Here we see that Lime, cream, Kiddie, Small and Medium are all tied together creating 11 rules that don't have very high support.  While this doesn't give us much insight about these items, it does reveal something about consumer behavior.  We might consider that a promotion for free lime with purchase would be very popular, many of our customers are getting this.  Instead we might consider that giving free lime to a large might encourage customers to upsize which could be profitable to our partner.  With the connection of kiddie and other sizes in these rules, we might consider running an early season promotion where the customer gets a second medium for the price of a small.  Run this promotion for a limited time to see if you can influence long term those customers to change from both small and medium to only mediums.
 \newpage
 # Appendix: Data quality report
 ```{r,include = TRUE}
@@ -437,3 +462,9 @@ glimpse(df_sale)
 - **Time of Sale**: The timeframe during which the sale event is active (e.g., "11 AM - 1 PM" or "All day").
 
 - **Location of Sale**: Specifies the location of the sale event, such as "Mobile Trailer," "East," or "Main."
+
+
+
+
+
+
