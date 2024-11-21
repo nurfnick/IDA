@@ -359,14 +359,17 @@ The pattern indicates that sales are concentrated in the early morning hours, pe
 ## Association on Sales
 
 I was curious to see if we could identify any association between the chunks of the day.  Could we predict that if someone bought a large that they would also get a medium and candy?  We utilize the `arules` package to examine this.
+
+
 ```{r}
-#I want to group the data by 10 minute chunks so that I can accurately predict how to allocate workers. 
-dfBy10min <-df %>%
-  group_by(group10min = cut(dt, "10 min"),Staff) %>%
-  summarize(names = list(unique(str_trim(Name))),totalSales = sum(Final.price..USD.)) %>%
-  ungroup()
-  #summarize(totalSales = sum(Final.price..USD.)) %>%
-  
+df <- df %>%
+  mutate(
+    # Convert weekdays to an ordered factor to maintain consistent weekday order on the x-axis
+    weekdays = factor(weekdays(dt), 
+                      levels = c("Sunday", "Monday", "Tuesday", "Wednesday", 
+                                 "Thursday", "Friday", "Saturday")),
+    month = factor(month(dt))
+  )
 dfByTrans <- df %>%
   group_by(Receipt.number) %>%
   summarize(names = list(unique(str_trim(Name)))) %>%
@@ -395,6 +398,25 @@ rules <- apriori(trans,
 inspect(rules)
 ```
 Here we see that Lime, cream, Kiddie, Small and Medium are all tied together creating 11 rules that don't have very high support.  While this doesn't give us much insight about these items, it does reveal something about consumer behavior.  We might consider that a promotion for free lime with purchase would be very popular, many of our customers are getting this.  Instead we might consider that giving free lime to a large might encourage customers to upsize which could be profitable to our partner.  With the connection of kiddie and other sizes in these rules, we might consider running an early season promotion where the customer gets a second medium for the price of a small.  Run this promotion for a limited time to see if you can influence long term those customers to change from both small and medium to only mediums.
+
+## Regression for Time of Day
+
+Our business partner would love to have a demand schedule based on the time of day and week.  We will build a model for that.
+```{r}
+#I want to group the data by 15 minute chunks so that I can accurately predict how to allocate workers. 
+dfBy10min <-df %>%
+  group_by(group10min = cut(dt, "15 min"),Staff) %>%
+  summarize(names = list(unique(str_trim(Name))),totalSales = sum(Final.price..USD.), month, weekdays)%>%
+  mutate(hour = factor(hour(group10min)), min = minute(group10min))%>%
+  ungroup()
+  #summarize(totalSales = sum(Final.price..USD.)) %>%
+
+lm(totalSales ~ month+ weekdays + Staff + hour + min +hour:min, data =dfBy10min)
+```
+
+This is a model, I'll let someone else interpret...
+
+
 \newpage
 # Appendix: Data quality report
 ```{r,include = TRUE}

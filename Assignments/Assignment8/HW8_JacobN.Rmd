@@ -44,7 +44,7 @@ library(dbscan)
 df = read.csv("winequality-red.csv", sep = ";")
 head(df)
 ```
-The wine quality dataset came from the UCI Machine Learning Repository linked directly [here](https://archive.ics.uci.edu/dataset/186/wine+quality).  We see there are `r length(df)` variables and `r nrow(df)` entries.  All of the entries are numerical except that the quality of the wine is listed as a factor ranging from 0 to 10.  We will try to see if we can cluster and find the quality.
+The wine quality dataset came from the UCI Machine Learning Repository linked directly [here](https://archive.ics.uci.edu/dataset/186/wine+quality) or with the url https://archive.ics.uci.edu/dataset/186/wine+quality.  We see there are `r length(df)` variables and `r nrow(df)` entries.  All of the entries are numerical except that the quality of the wine is listed as a factor ranging from 3 to 8.  We will try to see if we can cluster and find the quality.
 
 ```{r}
 
@@ -54,7 +54,7 @@ dfScaled<-scale(df[,!(names(df) %in% c('quality'))])
 dfKM <- kmeans(dfScaled,3, nstart=20)  
 ```
 
-I removed the quality from the data before running it through the cluster analysis.  I ran `kmeans` with several starts but it always went to `r dfKM$iter`.  While I was expecting 10 because of the quality.  
+I removed the quality from the data before running it through the cluster analysis.  I ran `kmeans` with several starts but it always went to `r dfKM$iter`.  While I was expecting 6 because of the quality.  
 
 This graph here uses the two qualities of wine I am most familiar with, sulfates and alcohol.
 
