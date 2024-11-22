@@ -486,6 +486,33 @@ glimpse(df_sale)
 - **Location of Sale**: Specifies the location of the sale event, such as "Mobile Trailer," "East," or "Main."
 
 
+# Modeling Summary
+# 1. Data Preparation:
+#    Objective: Ensure the dataset is clean and well-structured to support analysis and development.
+#    We removed outliers (e.g., negative prices/quantities).
+#    Then we standardized variables and enriched date-time with features (e.g., hour, weekday) and grouped data into 15-minute intervals for regression analysis.
+
+# 2. Exploratory Data Analysis:
+#    Though analysis we found peak sales between 2:00–4:00 AM, with Fridays being busiest as well as determine popular products: "Medium," "Large," and add-ons like "Lime."
+#    Then explore the seasonal trends such as High sales in spring/summer, and declining late summer.
+
+# 3. Association Rule Mining:
+#    We uncovered relationships between purcahsed items to help with selling strategies. 
+#    We found that customers frequently pair sizes and add ons (e.g., "Lime" with "Medium").
+
+# 4. Regression Modeling:
+#    We delevolped a predictive model based on time, day, and staff levels for the increase in sales. 
+#    We built a linear regression using time, day, and staffing levels.
+#    We found that interaction efffects revealed great predictive oportunities for predicting sales.
+
+# 5. Insights:
+#    We found large impacts from staffing and need to focus resources on early morning peaks, especially weekends and we found that promotions can leverage popular add-ons and seasonal campaigns.
+
+# Future Directions:
+#    Next we want to test advanced models (e.g., time-series analysis) to enchance sales forecasts and explore clustering models for inventory management.
+
+
+
 
 
 
