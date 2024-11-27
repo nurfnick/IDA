@@ -1,12 +1,14 @@
 ---
 #title: "Project:  SnOasis"
 #author: "Nicholas Jacob, Yechang Qi, James Wahome, Zayne Mclaughlin"
-#date: "2024-10-21"
+#date: "2024-11-21"
 #institute: "University of Oklahoma"
 #toc: true 
 output: 
   pdf_document:
     latex_engine: xelatex
+header-includes:
+- \usepackage{float}
 ---
 
 ```{r setup, include = FALSE}
@@ -19,7 +21,6 @@ library(Metrics)
 library(reshape2)
 library(scales)
 library(fastDummies)
-library(kableExtra)
 library(glmnet)
 library(tidyr)
 library(forcats)
@@ -28,8 +29,8 @@ library(car)
 library(pls)
 library(lars)
 library(lubridate)
-#library(corrplot)
-#library(ggfortify)
+library(broom)
+library(kableExtra)
 library(MASS)
 library(caret)
 library(magrittr)
@@ -55,14 +56,28 @@ library(arules)
 
 \newpage
 
-# Initial Data Analysis
+# Problem Description
 
-Our dataset needs some cleaning before analysis. Although we don't have missing values thanks to our real-time recording system, we still need to handle a few things. First, we'll deal with outliers, specifically negative values in Quantity or Final Price that show returns or corrections. We'll find and remove these transactions along with their original entries. We'll also check if any unusually high prices or quantities need to be capped. Next, we'll properly format our category data like Staff, Location, and Product Names for analysis, possibly grouping similar products together to keep things simple. Finally, we'll clean up our date and time information, fixing any weird symbols and adding useful details like day of the week and hour of day.
+Optimizing operations and identifying effective promotional strategies are key challenges for SnOasis, a chain of snow cone stands in Ada, Oklahoma. With labor costs representing the largest operational expense, understanding customer behavior and predicting sales patterns can provide critical insights to improve resource allocation and drive revenue growth.
+
+SnOasis has collected a comprehensive dataset containing 76,219 entries representing 37,196 separate sales transactions across multiple locations. This dataset includes variables such as the time of purchase, product names (e.g., sizes like Small, Medium, Large, and flavors like Lime, Cream, Kitkat), quantities sold, prices, and subtotals. Despite the richness of this information, it remains underutilized in uncovering meaningful patterns or informing strategic decision-making. Since we don’t have direct labor data, we would like to estimate labor needs using sales patterns by analyzing transaction volumes and sales trends to infer peak demand periods and staffing requirements.
+
+One area of focus is examining the associations between purchased items to better understand customer purchasing behavior. Identifying patterns in how products are commonly bought together can provide insights into customer preferences and spending habits. This analysis can help SnOasis develop targeted promotional strategies that not only enhance the customer experience but also drive sales and increase profitability. By leveraging these associations, SnOasis can make data-driven decisions to optimize product offerings and marketing campaigns.
+
+Another important area is the prediction of sales based on time and day. Analyzing how sales vary across different times of the day and week allows us to create a demand schedule, helping SnOasis optimize staffing levels. By aligning labor with peak demand periods and reducing overstaffing during slower times, SnOasis can minimize operational costs while maintaining excellent service.
+
+By leveraging this dataset, along with association rules and predictive modeling, this project aims to provide actionable insights that will help SnOasis streamline operations, reduce costs, and better serve its customers.
+
+# Exploratory Data Analysis
+
+Our dataset needs some cleaning before analysis. Thanks to SnOasis's real-time recording system, there are no missing values, but several issues still require attention. First, we address outliers, such as negative values in Quantity or Final Price that indicate returns or corrections. These transactions, along with their corresponding original entries, are identified and removed. Unusually high prices or quantities are also reviewed and capped if necessary. Category data, including Staff, Location, and Product Names, is formatted for analysis, with similar products grouped together to simplify the dataset. Additionally, date and time information is cleaned by fixing any irregular symbols and extracting useful details, such as the day of the week and hour of the day, to enhance the analysis.
 
 ```{r dataload}
 df = read.csv("https://github.com/nurfnick/SnOasis/raw/refs/heads/main/snoasisData.csv")
 tail(df)
 ```
+
+
 ```{r}
 #Time needs to be cleaned up.  Made it into datetime.
 df$dt <- make_datetime(year(mdy(df$Date)), 
@@ -73,7 +88,6 @@ df$dt <- make_datetime(year(mdy(df$Date)),
 # Remove '?' from Time column
 df$Time <- gsub("\\?", "", df$Time)
 ```
-
 
 ```{r}
 dfNumeric <- df %>% 
@@ -90,6 +104,8 @@ dfNumeric <- dfNumeric %>%
     Final_price = `Final.price..USD.`,
     Cost_price = `Cost.price`
   )
+dfNumeric <- dfNumeric %>% 
+  mutate(across(everything(), ~ ifelse(. < 0, 0, .)))
 ```
 ```{r}
 dfFactor <- df %>% 
@@ -143,7 +159,7 @@ numericSummary <- dfNumeric %>%
 options(digits = 2, scipen = 0)
 ```
 
-```{r, include = TRUE, fig.pos = "H"}
+```{r, include = TRUE, fig.pos="H"}
 # Display the Descriptive Summary of Numeric Variables
 numericSummary %>%  
   kable(digits = 2, format = "latex", booktabs = TRUE, 
@@ -212,8 +228,12 @@ factorSummaryFinal %>%
   row_spec(1:nrow(factorSummaryFinal), extra_latex_after = "\\addlinespace[0.25em]")
 ```
 
+The numeric variables in the Table 1 provide a clear understanding of transaction details, including the quantity of items sold, their prices, and the financial aspects of each sale. Notably, the Receipt_number variable highlights 76,219 entries across 37,196 unique transactions, indicating multi-line transactions within single receipts. The Quantity variable shows that most transactions involve one or two items, as reflected by a median value of 1 and a maximum of 40. This suggests that bulk purchases are uncommon, likely due to the nature of the business, which caters to individual customers or small groups. The Price variable ranges from 0 to 104.5, with most items priced under \$3.50 (Q3 = 3.5). This aligns with expectations for snow cone sales, where individual items are typically low-cost. Discounts are represented by a binary Discount variable, where the vast majority of transactions do not include discounts (mode = 0). Meanwhile, the Subtotal, Total_tax, and Final_price variables confirm that most transactions are small in scale, with medians of \$3.75, \$0.09, and \$2.20, respectively. The high variability in prices and subtotals may be influenced by factors like product size, add-ons, or customer preferences.
 
-# Visualizations
+Table 2 also provide important insights into transaction details. The Date variable captures sales across 236 unique days, with the highest number of transactions recorded on May 6, 2023 (671 sales). This could indicate a particularly busy day for the business, possibly tied to a seasonal or promotional event. The Time variable contains over 21,000 unique timestamps, with a most frequent transaction time of 2:48:12 PM, though this frequency (37 transactions) suggests that transactions are fairly evenly distributed throughout the day. The Staff variable reveals that "SnOasis Main" handles the bulk of the transactions, accounting for 38,804 sales. This indicates that this location likely serves as the primary or busiest stand in the chain. The Name variable highlights the popularity of specific products, with "Medium" being the most frequently sold product, appearing 16,391 times. This provides insights into customer preferences, which can inform inventory and promotion decisions.
+
+While this summary provides an initial understanding, visualizing the data offers deeper insights into customer behavior. To further explore patterns, we investigate sales trends across different timeframes, including by hour, weekday, and month.
+
 ```{r,include = TRUE, fig.height=4}
 # First plot: Sales by Hour
 p1 <- df %>%
@@ -221,7 +241,13 @@ p1 <- df %>%
   ggplot(aes(x = hour)) +
   geom_bar() +
   labs(title = "Sales by Hour") +
-  theme_minimal()  # Adds a white background
+  theme_minimal() +
+  theme(
+    text = element_text(size = 10),          # Set all text elements to size 10
+    plot.title = element_text(size = 10),   # Specific adjustment for plot title
+    axis.text = element_text(size = 10),    # Axis labels
+    axis.title = element_text(size = 10)    # Axis titles
+  )
 
 # Second plot: Sales by Weekday
 df$weekdays <- factor(weekdays(df$dt), 
@@ -232,7 +258,13 @@ p2 <- df %>%
   ggplot(aes(x = weekdays)) +
   geom_bar() +
   labs(title = "Sales by Weekday") +
-  theme_minimal()  # Adds a white background
+  theme_minimal() +
+  theme(
+    text = element_text(size = 10),
+    plot.title = element_text(size = 10),
+    axis.text = element_text(size = 10),
+    axis.title = element_text(size = 10)
+  )
 
 # Third plot: Sales by Month
 p3 <- df %>% 
@@ -241,124 +273,75 @@ p3 <- df %>%
   ggplot(aes(x = month)) +
   geom_bar() +
   labs(title = "Sales by Month") +
-  theme_minimal()  # Adds a white background
+  theme_minimal() +
+  theme(
+    text = element_text(size = 10),
+    plot.title = element_text(size = 10),
+    axis.text = element_text(size = 10),
+    axis.title = element_text(size = 10)
+  )
 
-# Combine the three plots into one figure
-library(gridExtra)
-grid.arrange(p1, p2, p3, ncol = 1)
+# Combine the three plots into one figure with a title
+grid.arrange(
+  p1, p2, p3, 
+  ncol = 1, 
+  top = textGrob(
+    "Figure 1: Summary of Sales by Hour, Weekday, and Month", 
+    gp = gpar(fontsize = 10)
+  )
+)
 ```
 
 The Sales by Hour plot shows a peak in sales between 2:00 AM and 4:00 AM, indicating that most transactions occur during these early morning hours. The Sales by Weekday plot reveals consistent sales across the week, with only a slight dip on Sundays, suggesting steady demand without a strong weekday or weekend effect. The Sales by Month plot highlights higher sales from April to July, followed by a decline from August to October, hinting at seasonal trends with peak activity in spring and early summer and a slower period in late summer.
-
-```{r,include = TRUE, fig.height=3}
-df %>%
-  group_by(Name) %>%
-  summarise(Total_Sales = sum(Final.price..USD., na.rm=TRUE)) %>%
-  arrange(desc(Total_Sales)) %>%
-  head(10) %>%
-  ggplot(aes(x = reorder(Name, Total_Sales), y = Total_Sales)) +
-  geom_bar(stat = "identity") +
-  coord_flip() +
-  labs(title = "Top 10 Best-Selling Products", x = "Product Name", y = "Total Sales (USD)") +
-  theme_minimal() 
-```
-This chart shows that the highest-grossing products at SnOasis are primarily size options, with "Medium," "Small," and "Large" leading in total sales. Size variations dominate the top 10, indicating they are the most popular choices among customers. Additionally, add-ons like "Lime" and "Cream" and specialized items like "S M L Salty Dog Charge" and "Pup Cup" contribute significantly to sales. This suggests that offering a variety of sizes and add-ons is key to driving revenue at SnOasis.
-
-
-```{r include = TRUE, fig.height=3}
-df %>%
-  mutate(
-    # Convert weekdays to an ordered factor to maintain consistent weekday order on the x-axis
-    weekdays = factor(weekdays(dt), 
-                      levels = c("Sunday", "Monday", "Tuesday", "Wednesday", 
-                                 "Thursday", "Friday", "Saturday"))
-  ) %>%
-  ggplot(aes(x = weekdays, y = Final.price..USD.)) +
-  # Create a box plot for sales (final price) by each weekday
-  geom_boxplot(fill = "skyblue", color = "darkblue", outlier.color = "red") +
-  # Add titles and labels for clarity
-  labs(title = "Distribution of Sales by Weekday", 
-       x = "Weekday", 
-       y = "Final Price (USD)") +
-  # Use a minimal theme for a clean look
-  theme_minimal()
-```
-
-The Distribution of Sales by Weekday plot shows that the majority of sales prices are relatively low and consistent across all days, as indicated by the compact boxplots near the bottom. However, there are some high-price outliers (marked by red dots) each day, with the highest outlier reaching around $120. This suggests that while typical sales amounts are stable throughout the week, occasional high-value transactions occur randomly across all days.
  
-```{r include = TRUE}
+```{r include = TRUE, fig.height=4}
 df %>%
   filter(Name != "" & Name != "5.31") %>%  # Exclude blank and "5.31" product names
   ggplot(aes(x = Name, y = Price..USD.)) +
-  geom_boxplot(fill = "skyblue", color = "darkblue", outlier.color = "red", outlier.size = 1) +  # Set the size of the outliers (dots) to make them smaller
-  labs(title = "Distribution of Sales by Product", 
-       x = "Product Name", 
-       y = "Price (USD)") +
+  geom_boxplot(
+    fill = "skyblue", 
+    color = "darkblue", 
+    outlier.color = "red", 
+    outlier.size = 1
+  ) +  # Set the size of the outliers (dots)
+  labs(
+    title = "Figure 2: Distribution of Sales by Product", 
+    x = "Product Name", 
+    y = "Price (USD)"
+  ) +
   theme_minimal() +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+  theme(
+    plot.title = element_text(
+      size = 10,           # Set the font size to 10
+      hjust = 0.5          # Center the title
+    ),
+    axis.text.x = element_text(angle = 90, hjust = 1)  # Rotate x-axis labels
+  )
 ```
 
 This plot, showing the Distribution of Sales by Product, illustrates the variation in sales prices across different products. Most products have a narrow price range clustered near the bottom of the plot, indicating relatively low and consistent prices. However, there are a few products with a wider range and several high-price outliers (indicated by red dots) — for example, products like "Gift Card," "Large," "Kiddie," and "Skittles" have higher price variability and occasional outliers reaching above $25. This suggests that while most items are low-cost, a few products are occasionally sold at higher prices, possibly due to different sizes, premium options, or special product variations.
+```{r}
+cap_outliers <- function(x) {
+  q1 <- quantile(x, 0.25, na.rm = TRUE)
+  q3 <- quantile(x, 0.75, na.rm = TRUE)
+  iqr <- q3 - q1
+  lower_bound <- q1 - 1.5 * iqr
+  upper_bound <- q3 + 1.5 * iqr
+  x <- ifelse(x < lower_bound, lower_bound, x)
+  x <- ifelse(x > upper_bound, upper_bound, x)
+  return(x)
+}
 
-```{r include = TRUE, fig.height=3.5}
-df %>%
-  mutate(
-    # Convert hour and weekday into factors for better control in the plot
-    hour = factor(hour(dt)),
-    weekdays = factor(weekdays(dt), 
-                      levels = c("Sunday", "Monday", "Tuesday", "Wednesday", 
-                                 "Thursday", "Friday", "Saturday"))
-  ) %>%
-  # Group data by each combination of weekday and hour to calculate average sales
-  group_by(weekdays, hour) %>%
-  summarize(avg_sales = mean(Final.price..USD., na.rm = TRUE)) %>%
-  # Plot heatmap with hour on the x-axis and weekday on the y-axis
-  ggplot(aes(x = hour, y = weekdays, fill = avg_sales)) +
-  # Use a tile geometry for the heatmap and set color gradient for average sales
-  geom_tile(color = "white") +
-  # Color gradient from light yellow to dark red, showing lower to higher sales
-  scale_fill_gradient(low = "lightyellow", high = "darkred") +
-  # Add titles and labels for the heatmap
-  labs(title = "Average Sales by Hour and Day", 
-       x = "Hour", 
-       y = "Weekday", 
-       fill = "Avg Sales (USD)") +
-  # Minimal theme for a cleaner appearance
-  theme_minimal()
+# Apply to numeric columns
+dfNumeric <- dfNumeric %>%
+  mutate(across(everything(), cap_outliers))
 ```
-The heatmap shows that average sales are generally consistent but low across most days and hours, with one noticeable peak on Friday around 9:00 AM. Sunday has the lowest average sales, especially in the early morning hours. This suggests that SnOasis could focus promotions or staffing on the Friday morning peak and consider adjusting resources for lower-demand times, particularly on Sundays.
 
-```{r include = TRUE, fig.height=3.5}
-df %>%
-  mutate(
-    # Convert hour and weekday into factors for better control in the plot
-    hour = factor(hour(dt)),
-    weekdays = factor(weekdays(dt), 
-                      levels = c("Sunday", "Monday", "Tuesday", "Wednesday", 
-                                 "Thursday", "Friday", "Saturday"))
-  ) %>%
-  # Group data by each combination of weekday and hour to calculate average sales
-  group_by(weekdays, hour) %>%
-  summarize(total_sales = sum(Final.price..USD., na.rm = TRUE)) %>%
-  # Plot heatmap with hour on the x-axis and weekday on the y-axis
-  ggplot(aes(x = hour, y = weekdays, fill = total_sales)) +
-  # Use a tile geometry for the heatmap and set color gradient for average sales
-  geom_tile(color = "white") +
-  # Color gradient from light yellow to dark red, showing lower to higher sales
-  scale_fill_gradient(low = "lightyellow", high = "darkred") +
-  # Add titles and labels for the heatmap
-  labs(title = "Total Sales by Hour and Day", 
-       x = "Hour", 
-       y = "Weekday", 
-       fill = "Total Sales (USD)") +
-  # Minimal theme for a cleaner appearance
-  theme_minimal()
-```
-The pattern indicates that sales are concentrated in the early morning hours, peaking around 2:00 to 5:00 AM across most days, particularly from Friday through Sunday. Sales decrease significantly after 7:00 AM and remain low throughout the late morning. This suggests that SnOasis experiences its busiest periods in the early morning hours on weekends, which could inform staffing and inventory decisions for these peak times.
- 
+# Description of modeling approach & Initial results
+
 ## Association on Sales
 
-I was curious to see if we could identify any association between the chunks of the day.  Could we predict that if someone bought a large that they would also get a medium and candy?  We utilize the `arules` package to examine this.
+We aimed to explore whether there are any associations between purchases made during different parts of the day. Specifically, we wanted to investigate if certain buying patterns exist, such as whether a customer who purchases a large item is likely to also buy a medium and candy. To uncover these potential relationships, we utilized the arules package, which is designed to identify patterns and associations within transactional data. This analysis provides insights into customer behavior that can inform targeted promotions and bundling strategies.
 
 
 ```{r}
@@ -379,14 +362,20 @@ dfByTrans <- df %>%
 With the data compiled at the transaction level, we examine the top 10 most common purchases, surprisingly large is below adding lime.
 
 ```{r, include = TRUE}
-
-
 trans <- as(dfByTrans$names, "transactions")
 
-itemFrequencyPlot(trans, topN = 15)
+itemFrequencyPlot(
+  trans, 
+  topN = 10,                            
+  type = "absolute",                     # Use absolute frequencies
+  main = "Figure 3: Item Frequency Plot",          # Title              
+  cex.names = 0.7,                       # Set axis text size (relative to default)
+  cex.main = 0.8 ,
+  font.main = 1 
+)
 
 ```
-Next we use this to predict consumer behavior.  
+
 ```{r}
 rules <- apriori(trans, 
                  parameter = list(supp=0.05, conf=0.25, 
@@ -395,42 +384,146 @@ rules <- apriori(trans,
                                   target= "rules"))
 ```
 ```{r, include = TRUE}
-inspect(rules)
+# Convert the rules to a data frame
+rules_df <- as(rules, "data.frame")
+
+# Create and style the table
+rules_df %>%
+  kbl(
+    digits = 3,  # Round numeric columns to 3 decimal places
+    caption = "Association Rules Summary"
+  ) %>%
+  kable_styling(
+    full_width = FALSE, 
+    position = "center", 
+    bootstrap_options = c("striped", "hover", "condensed")
+  ) %>%
+  row_spec(0, bold = TRUE)  # Bold the header row
+
 ```
-Here we see that Lime, cream, Kiddie, Small and Medium are all tied together creating 11 rules that don't have very high support.  While this doesn't give us much insight about these items, it does reveal something about consumer behavior.  We might consider that a promotion for free lime with purchase would be very popular, many of our customers are getting this.  Instead we might consider that giving free lime to a large might encourage customers to upsize which could be profitable to our partner.  With the connection of kiddie and other sizes in these rules, we might consider running an early season promotion where the customer gets a second medium for the price of a small.  Run this promotion for a limited time to see if you can influence long term those customers to change from both small and medium to only mediums.
+Next, we use this analysis to predict consumer behavior and identify potential opportunities for targeted promotions. The association rules generated from the Apriori Algorithm allow us to uncover patterns in how customers combine items during their purchases. By analyzing these rules, we can gain insights into customer preferences and shopping habits, which can guide both operational decisions and marketing strategies.
+
+From Table 3, we observe that items like Lime, Cream, Kiddie, Small, and Medium are interconnected, creating 11 association rules. However, these rules generally have low support, meaning that the combinations occur in a smaller percentage of transactions. Despite this, these rules still provide valuable insights into consumer behavior and preferences. For example, a rule like {Large} ⇒ {Lime}, with a confidence of 34%, suggests that customers who purchase a "Large" are relatively likely to add "Lime" to their order. This highlights an opportunity to promote "Lime" as an add-on for "Large" orders, which could drive additional revenue or encourage upsizing.
+
+Similarly, the connection between "Kiddie" and other sizes like "Medium" suggests that customers may respond well to promotions offering upgrades or discounts on additional purchases. These insights allow SnOasis to think strategically about bundling and promotions. For instance, running a limited-time offer, such as a free "Lime" with every "Large" purchase, could capitalize on the existing association between these items. Additionally, offering a second "Medium" size for the price of a "Small" could encourage customers to purchase more and potentially shift their buying preferences toward larger sizes in the long term.
+
+While the low support of these rules limits their overall impact, they still provide a basis for targeted promotions and marketing efforts. By leveraging these insights, SnOasis can experiment with data-driven strategies to influence customer behavior and maximize revenue.
 
 ## Regression for Time of Day
 
-Our business partner would love to have a demand schedule based on the time of day and week.  We will build a model for that.  We utilized time of day in 15 minute, month, and day with location to predict the total sales.  We believe this will be a boon to our corporate sponsor. 
+Our business partner would love to have a demand schedule based on the time of day and week.  We will build a model for that.
+
+
+The regression model used to predict total sales can be expressed mathematically as:
+
+\[
+\text{Total Sales} = \beta_0 + \beta_1 \cdot \text{Month} + \beta_2 \cdot \text{Weekday} + \beta_3 \cdot \text{Staff} + \beta_4 \cdot \text{Hour} + \beta_5 \cdot \text{Minute} + \beta_6 \cdot (\text{Hour} \cdot \text{Minute}) + \epsilon
+\]
+
+Where:
+
+- \(\beta_0\): Intercept
+
+- \(\beta_1\): Coefficients for the **Month** variable, capturing seasonal effects.
+
+- \(\beta_2\): Coefficients for the **Weekday** variable, capturing variations across weekdays.
+
+- \(\beta_3\): Coefficients for the **Staff** variable, accounting for the effect of different locations/staff.
+
+- \(\beta_4\): Coefficients for the **Hour** variable, capturing time-based variations in sales.
+
+- \(\beta_5\): Coefficients for the **Minute** variable, representing changes within each hour.
+
+- \(\beta_6\): Coefficients for the **interaction term** (\( \text{Hour} \cdot \text{Minute} \)), capturing the combined effect of specific hours and minutes.
+
+- \(\epsilon\): Error term, accounting for unobserved variability.
 ```{r}
+library(dplyr)
+library(lubridate)
+
+# Group data by 15-minute intervals and summarize
 #I want to group the data by 15 minute chunks so that I can accurately predict how to allocate workers. 
-dfBy10min <-df %>%
-  group_by(group10min = cut(dt, "15 min"),Staff) %>% #Include the staff variable to analyze the impact of staff on sales ]
+dfBy15min <-df %>%
+  group_by(group15min = cut(dt, "15 min"),Staff) %>% #Include the staff variable to analyze the impact of staff on sales ]
   summarize(names = list(unique(str_trim(Name))),totalSales = sum(Final.price..USD.), month, weekdays)%>% #Collect unique item names sold during each interval
-  mutate(hour = factor(hour(group10min)), #Extract the hour of each 15-minute interval as a factor
-    min = minute(group10min) #Extract the minute of each 15-minute interval as a numeric value
+  mutate(hour = factor(hour(group15min)), #Extract the hour of each 15-minute interval as a factor
+    min = minute(group15min) #Extract the minute of each 15-minute interval as a numeric value
   )%>%
   ungroup()
-```
 
-```{r}
 #Fit a linear regression model to predict total sales
   #summarize(totalSales = sum(Final.price..USD.)) %>%
-linear <- lm(
+linear_sales_model <- lm(
   totalSales ~ month + weekdays + Staff + hour + min + hour:min, #Use these predictors:
   #month: Seasonal effects (e.g., higher sales in December).
   #weekdays: Captures variations between weekdays and weekends.
   #Staff: Helps understand if certain staff members influence sales.
   #hour and min: Time-based features to capture daily demand fluctuations.
   #hour:min: Interaction term to detect how specific time combinations (e.g., 10:15 AM) affect sales.
-  data = dfBy10min) #Use the grouped and aggregated dataset for modeling
+  data = dfBy15min) #Use the grouped and aggregated dataset for modeling
 
+# Tidy the model output and add significance stars
+significant_model_table <- linear_sales_model %>%
+  tidy() %>%
+  mutate(
+    significance = case_when(
+      p.value < 0.001 ~ "***",
+      p.value < 0.01 ~ "**",
+      p.value < 0.05 ~ "*",
+      p.value < 0.1 ~ ".",
+      TRUE ~ ""
+    )
+  ) %>%
+  filter(significance != "") # Keep only rows with significance stars
+
+# Print the filtered table
+print(significant_model_table)
 ```
+
 ```{r, include = TRUE}
-summary(linear)
+significant_model_table %>%
+  select(term, estimate, std.error, statistic, p.value, significance) %>%
+  kbl(
+    digits = 3, 
+    format = "latex",          # LaTeX format for PDF
+    booktabs = TRUE,           # Use professional-looking table style
+    caption = "Linear Regression Results with Significance Stars"
+  ) %>%
+  kable_styling(
+    latex_options = c("hold_position", "scale_down"), # Keep the table near and scalable
+    font_size = 10                                   # Adjust font size
+  ) %>%
+  row_spec(0, bold = TRUE) %>%                       # Bold the header row
+  column_spec(1, bold = TRUE, width = "8em")         # Bold the first column for emphasis
+
 ```
 
-This is a model, I'll let someone else interpret...
+The linear regression model provides a detailed understanding of the factors influencing sales at SnOasis. Table 4 presented includes only statistically significant results (p-values less than 0.1), ensuring the focus is on meaningful predictors. These insights reveal patterns related to time, staffing, and seasonal trends, all of which are critical for optimizing operations.
+
+The analysis of monthly effects shows that sales decline significantly in November, with a strong significance level (p = 0.001), indicating a clear seasonal drop in demand. October also shows a decrease in sales, but the effect is only marginally significant (p = 0.085). These findings highlight the seasonal nature of sales, particularly in November, and suggest the need for strategies to counteract lower demand during these months.
+
+Variations in sales across weekdays are also evident. Mondays and Tuesdays show significantly lower sales, with very strong significance levels (p < 0.001). Wednesday also experiences a smaller but still notable decline in sales (p < 0.001). On the other hand, Saturdays show a modest but meaningful increase in sales (p = 0.018), consistent with higher weekend traffic. These patterns underscore the importance of tailoring staffing levels and promotional efforts to meet day-specific demand.
+
+Staffing has a significant impact on sales, with SnOasis Main and SnOasis East locations driving much higher sales compared to the baseline location, both showing very strong significance levels (p < 0.001). This indicates that these locations are major contributors to overall sales, likely due to higher foot traffic or operational efficiency. These insights can guide resource allocation, helping SnOasis focus on high-performing locations while identifying improvement areas for others.
+
+Hourly effects reveal substantial fluctuations in sales throughout the day. Early morning hours, such as Hour 2 and Hour 3, see significant increases in sales, both with very strong significance levels (p < 0.001). Conversely, late morning and midday hours, such as Hour 11, experience sharp declines in sales, also with very strong significance (p < 0.001). These insights are critical for optimizing staffing schedules, ensuring sufficient coverage during peak hours and avoiding overstaffing during slower periods.
+
+The minute variable shows a slight decrease in sales as the minute progresses within each hour, with moderate significance (p = 0.012). While the effect size is small, it may reflect the natural pacing of transactions or customer arrivals.
+
+Interaction terms between hours and minutes provide further insights into sales variations within 15-minute intervals. For example, during Hour 2, specific minutes show a small positive effect on sales (p = 0.035), while Hours 3 and 5 show slight decreases during certain intervals, with moderate significance (p = 0.026 and p = 0.041, respectively). These nuanced interactions highlight subtle time-based variations that can inform more precise adjustments in operations.
+
+In conclusion, this table provides a focused view of the significant predictors of sales, with p-values indicating their reliability. These results allow SnOasis to strategically plan staffing, promotions, and operational improvements, ensuring resources are aligned with customer demand to maximize efficiency and profitability.
+
+\newpage
+
+# Team Allocation:
+
+- **Nicholas Jacob**: Led the association rule mining using the Apriori algorithm and conducted code testing. Interpreted the association rule results.
+
+- **Yechang Qi**: Wrote the problem description and performed exploratory data analysis. Interpreted the linear model results.
+
+- **Zayne Mclaughlin**: Led the linear modeling and generated the results.
+
 
 
 \newpage
@@ -482,13 +575,13 @@ glimpse(dfFactor)
 - **Comment**: Field for any additional notes or comments about the transaction.
 
 ```{r,include = TRUE}
-df_sale = read.csv("https://github.com/nurfnick/SnOasis/raw/refs/heads/main/snoasisData.csv")
-#df_sale <- df_sale %>%
-  #rename(
-    #Time_of_Sale = `Time.of.Sale`,
-   # Sale_Description = `Sale.Description`,
-  #  Location_of_Sale = `Location.of.Sale`
-  #)
+df_sale = read.csv("SnOasisSaleDates.csv")
+df_sale <- df_sale %>%
+  rename(
+    Time_of_Sale = `Time.of.Sale`,
+    Sale_Description = `Sale.Description`,
+    Location_of_Sale = `Location.of.Sale`
+  )
 glimpse(df_sale)
 ```
 # Variable explanation for “SnOasisSale” file：
@@ -502,7 +595,7 @@ glimpse(df_sale)
 - **Location of Sale**: Specifies the location of the sale event, such as "Mobile Trailer," "East," or "Main."
 
 
-# Modeling Summary
+#Modeling Summary
  -**1. Data Preparation**:
     Objective: Ensure the dataset is clean and well-structured to support analysis and development.
     We removed outliers (e.g., negative prices/quantities).
@@ -513,20 +606,19 @@ glimpse(df_sale)
     Then explore the seasonal trends such as High sales in spring/summer, and declining late summer.
 
  -**3. Association Rule Mining**:
-    We uncovered relationships between purchased items to help with selling strategies. 
+    We uncovered relationships between purcahsed items to help with selling strategies. 
     We found that customers frequently pair sizes and add ons (e.g., "Lime" with "Medium").
 
  -**4. Regression Modeling**:
     We delevolped a predictive model based on time, day, and staff levels for the increase in sales. 
     We built a linear regression using time, day, and staffing levels.
-    We found that interaction effects revealed great predictive opportunities for predicting sales.
+    We found that interaction efffects revealed great predictive oportunities for predicting sales.
 
  -**5. Insights**:
     We found large impacts from staffing and need to focus resources on early morning peaks, especially weekends and we found that promotions can leverage popular add-ons and seasonal campaigns.
 
  -**Future Directions*:
     Next we want to test advanced models (e.g., time-series analysis) to enchance sales forecasts and explore clustering models for inventory management.
-
 
 
 
