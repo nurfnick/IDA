@@ -574,8 +574,8 @@ glimpse(dfFactor)
 
 - **Comment**: Field for any additional notes or comments about the transaction.
 
-```{r,include = TRUE}
-df_sale = read.csv("SnOasisSaleDates.csv")
+```{r, eval = FALSE}
+df_sale = read.csv("https://github.com/nurfnick/SnOasis/raw/refs/heads/main/snoasisData.csv")
 df_sale <- df_sale %>%
   rename(
     Time_of_Sale = `Time.of.Sale`,
