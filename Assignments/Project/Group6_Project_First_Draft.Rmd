@@ -498,6 +498,17 @@ significant_model_table %>%
 
 ```
 
+```{r}
+fitControl <- trainControl(## 10-fold CV
+                           method = "repeatedcv",
+                           number = 10,
+                           ## repeated ten times
+                           repeats = 10)
+train(totalSales ~ month + weekdays + Staff + hour + min + hour:min,
+      data = dfBy15min,
+      method = "lm",
+      trControl = fitControl)
+```
 The linear regression model provides a detailed understanding of the factors influencing sales at SnOasis. Table 4 presented includes only statistically significant results (p-values less than 0.1), ensuring the focus is on meaningful predictors. These insights reveal patterns related to time, staffing, and seasonal trends, all of which are critical for optimizing operations.
 
 The analysis of monthly effects shows that sales decline significantly in November, with a strong significance level (p = 0.001), indicating a clear seasonal drop in demand. October also shows a decrease in sales, but the effect is only marginally significant (p = 0.085). These findings highlight the seasonal nature of sales, particularly in November, and suggest the need for strategies to counteract lower demand during these months.
