@@ -409,6 +409,10 @@ Similarly, the connection between "Kiddie" and other sizes like "Medium" suggest
 
 While the low support of these rules limits their overall impact, they still provide a basis for targeted promotions and marketing efforts. By leveraging these insights, SnOasis can experiment with data-driven strategies to influence customer behavior and maximize revenue.
 
+## Methodology for Apriori Algorithm
+
+In order to understand the transactions presented in the data, we applied the Apriori algorithm.  This allowed us to examine the most frequent items that were purchased together.  The algorithm uses several parameters that required tuning through the use of the guess and check.  We desired to create some rules but to not overwhelm the reader with too many.  A support of 5\% and a confidence of 25\% achieved this goal.
+
 ## Regression for Time of Day
 
 Our business partner would love to have a demand schedule based on the time of day and week.  We will build a model for that.
