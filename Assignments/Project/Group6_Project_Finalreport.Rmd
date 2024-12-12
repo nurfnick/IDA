@@ -1,0 +1,860 @@
+---
+#title: "Project:  SnOasis"
+#author: "Nicholas Jacob, Yechang Qi, James Wahome, Zayne Mclaughlin"
+#date: "2024-11-21"
+#institute: "University of Oklahoma"
+#toc: true 
+output: 
+  pdf_document:
+    latex_engine: xelatex
+header-includes:
+- \usepackage{float}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+knitr::opts_chunk$set(include = FALSE) #this will make none of the code appear unless we ask it to.
+library(ggplot2)
+library(VIM)
+library(prophet)
+library(Metrics)
+library(reshape2)
+library(scales)
+library(fastDummies)
+library(glmnet)
+library(tidyr)
+library(forcats)
+library(forecast)
+library(knitr)
+library(car)
+library(pls)
+library(lars)
+library(lubridate)
+library(broom)
+library(kableExtra)
+library(MASS)
+library(caret)
+library(magrittr)
+library(gridExtra)
+library(dplyr)
+library(stringr)
+library(arules)
+```
+![](snoImage.png)
+
+\vspace{2cm} 
+\begin{center}
+\huge \textbf{UNIVERSITY OF OKLAHOMA} \\[2ex]
+\LARGE\textbf{DSA/ISE 5103 – INTELLIGENT DATA ANALYTICS}\\[4ex]
+
+\huge \textbf{Snow Cone Business:  A Data Driven Approach
+} \\[4ex]
+
+\Large \textbf{Nicholas Jacob, Yechang Qi, James Wahome, Zayne Mclaughlin} \\[4ex]
+\LARGE \textbf{Course Project Group 6} \\[10ex]
+
+\LARGE \textbf{2024-12-10}\\[1ex]
+\end{center}
+
+\newpage
+
+# Executive Summary
+
+SnOasis, a chain of snow cone stands in Ada, Oklahoma, is focused on optimizing operations and developing effective promotional strategies to address its unique business needs. Labor costs constitute the largest operational expense, yet there is no direct labor data available to inform staffing decisions. Instead, labor needs must be inferred indirectly through transaction volumes and sales trends. This limitation presents a challenge for accurately aligning staffing levels with demand, particularly in the absence of detailed operational metrics. Furthermore, the dataset used in this analysis spans only one full operating season, from March to December, as SnOasis closes during the winter months and reopens in spring. This limited timeframe restricts our ability to create a separate test set for evaluating model performance and highlights the need for careful consideration of seasonality in predictions.
+
+Using a comprehensive dataset containing 76,219 entries and 37,196 unique transactions, we employed association rule mining, regression analysis, and predictive modeling. Association rules generated from the Apriori algorithm revealed frequent item combinations, such as Lime, Cream, Kiddie, Small, and Medium, creating 11 actionable rules. Although these rules generally exhibited low support, they had high confidence, offering valuable insights into niche customer preferences. Regression modeling identified key predictors of sales, including month, weekday, time (hour/minute), and their interactions. Notably, sales exhibited a significant seasonal decline in November (p = 0.001) and lower activity on Mondays and Tuesdays (p < 0.001), with modest increases on Saturdays (p = 0.018).
+
+Three predictive models—ARIMA, ETS, and Prophet—were developed to forecast daily receipt counts. Due to the pronounced seasonality and the lack of multiple years of data, it was impossible to divide the dataset into independent training and testing subsets without compromising the integrity of the analysis. Instead, we used the entire dataset to fit the models, acknowledging that future data collection is necessary to robustly validate performance. Despite these constraints, the Prophet model outperformed the others, achieving the lowest RMSE of 50.7. Prophet effectively captured non-linear trends and seasonality, while ARIMA modeled short-term dependencies and trends well.
+
+The findings emphasize the importance of tailoring staffing schedules to match demand patterns. Early peaks and weekend surges require higher staffing levels, while low-demand periods, such as Mondays, Tuesdays, and November, provide opportunities to reduce labor costs. Promotional strategies should leverage association rule insights to create bundled offers for popular items, while weekday-specific discounts can increase traffic on slower days. Seasonal promotions in October and November can mitigate sales declines, and loyalty programs promoted during weekends can encourage weekday visits.
+
+Additionally, implementing clustering models can improve inventory management by identifying distinct purchasing patterns, reducing waste, and preventing stockouts. Dynamic pricing strategies based on demand forecasts would allow SnOasis to adjust prices in real-time, maximizing profitability while maintaining customer satisfaction. Future efforts should prioritize collecting additional seasonal data to validate and refine these models further. These recommendations provide a data-driven roadmap to optimize operations, improve customer engagement, and support sustainable growth for SnOasis.
+
+\newpage
+
+
+
+# Problem Description
+
+Optimizing operations and identifying effective promotional strategies are key challenges for SnOasis. With labor costs representing the largest operational expense, understanding customer behavior and predicting sales patterns can provide critical insights to improve resource allocation and drive revenue growth.
+
+SnOasis has collected a comprehensive dataset containing 76,219 entries representing 37,196 separate sales transactions across multiple locations. This dataset includes variables such as the time of purchase, product names (e.g., sizes like Small, Medium, Large, and flavors like Lime, Cream, Kitkat), quantities sold, prices, and subtotals. Despite the richness of this information, it remains underutilized in uncovering meaningful patterns or informing strategic decision-making. Since we don’t have direct labor data, we would like to estimate labor needs using sales patterns by analyzing transaction volumes and sales trends to infer peak demand periods and staffing requirements.
+
+One area of focus is examining the associations between purchased items to better understand customer purchasing behavior. Identifying patterns in how products are commonly bought together can provide insights into customer preferences and spending habits. This analysis can help SnOasis develop targeted promotional strategies that not only enhance the customer experience but also drive sales and increase profitability. By leveraging these associations, SnOasis can make data-driven decisions to optimize product offerings and marketing campaigns.
+
+Another important area is the prediction of sales based on time and day. Analyzing how sales vary across different times of the day and week allows us to create a demand schedule, helping SnOasis optimize staffing levels. By aligning labor with peak demand periods and reducing overstaffing during slower times, SnOasis can minimize operational costs while maintaining excellent service.
+
+By leveraging this dataset, along with association rules and predictive modeling, this project aims to provide actionable insights that will help SnOasis streamline operations, reduce costs, and better serve its customers.
+
+# Data Description
+
+The dataset comprises 76,219 entries representing 37,196 unique transactions recorded during a single operating season (March to December) at SnOasis, a snow cone stand chain in Ada, Oklahoma. It includes key variables such as date, hour, and time to capture temporal patterns, along with receipt numbers for unique transaction identification. Sales metrics include product name, quantity, price, subtotal, and tax, enabling detailed analysis of customer purchasing behavior and sales trends. The data reflects strong seasonal patterns, with significant fluctuations across months, days of the week, and hours of the day. While rich in transactional detail, the dataset lacks labor data and spans only one year, limiting its use for long-term trend validation and requiring careful handling of seasonality in predictive modeling.
+
+
+# Exploratory Data Analysis
+
+SnOasis's real-time recording system ensures that there are no missing values in the dataset. However, several data quality issues are addressed to prepare the dataset for analysis. Outliers, such as negative values in Quantity or Final Price that indicate returns or corrections, are identified and removed along with their corresponding original entries. Unusually high prices or quantities are reviewed and capped to ensure consistency. Categorical variables, including Staff, Location, and Product Names, are standardized and grouped where appropriate to simplify the dataset. Date and time information is cleaned by correcting irregular symbols and extracting features such as the day of the week and hour of the day to facilitate analysis.
+
+```{r dataload}
+df = read.csv("https://github.com/nurfnick/SnOasis/raw/refs/heads/main/snoasisData.csv")
+tail(df)
+```
+
+
+```{r}
+#Time needs to be cleaned up.  Made it into datetime.
+df$dt <- make_datetime(year(mdy(df$Date)), 
+              month(mdy(df$Date)),
+              day(mdy(df$Date)),
+              hour(hms(df$Time)),
+              minute(hms(df$Time)))
+# Remove '?' from Time column
+df$Time <- gsub("\\?", "", df$Time)
+```
+
+```{r}
+dfNumeric <- df %>% 
+  dplyr::select(where(is.numeric))
+glimpse(dfNumeric)
+dfNumeric <- dfNumeric %>%
+  rename(
+    Receipt_number = `Receipt.number`,
+    Quantity = Quantity,  # this one stays the same
+    Price = `Price..USD.`,
+    Discount = `Discount..USD.`,
+    Subtotal = `Subtotal..USD.`,
+    Total_tax = `Total.tax.collected..USD.`,
+    Final_price = `Final.price..USD.`,
+    Cost_price = `Cost.price`
+  )
+dfNumeric <- dfNumeric %>% 
+  mutate(across(everything(), ~ ifelse(. < 0, 0, .)))
+```
+```{r}
+dfFactor <- df %>% 
+  dplyr::select(where(is.character))%>%
+  mutate_all(factor)
+glimpse(dfFactor)
+dfFactor <- dfFactor %>%
+  rename(
+    Tax_info = Tax.Info.Available,
+    Tax_exempt = Is.Tax.Exempt
+  )
+
+```
+
+```{r}
+Q1<-function(x,na.rm=TRUE) {
+quantile(x,na.rm=na.rm)[2]
+}
+Q3<-function(x,na.rm=TRUE) {
+quantile(x,na.rm=na.rm)[4]
+}
+```
+
+```{r}
+myNumericSummary <- function(x){
+  c(length(x), n_distinct(x), sum(is.na(x)), mean(x, na.rm=TRUE),
+  min(x,na.rm=TRUE), Q1(x,na.rm=TRUE), median(x,na.rm=TRUE), Q3(x,na.rm=TRUE),
+  max(x,na.rm=TRUE), sd(x,na.rm=TRUE))
+}
+```
+
+```{r}
+# Summary function
+numericSummary <- dfNumeric %>%
+  summarise_all(myNumericSummary) %>%
+  # Adding descriptive statistics to the numeric summary table
+  cbind(stat = c("n", "unique", "missing", "mean", "min", "Q1", "median", "Q3", "max",
+                 "sd")) %>%
+
+  tidyr::pivot_longer(cols = "Receipt_number":"Cost_price", names_to = "variable", 
+                      values_to = "value") %>%
+  tidyr::pivot_wider(names_from = stat, values_from = value) %>%
+  dplyr::mutate(
+    missing_pct = 100 * missing / n,
+    unique_pct = 100 * unique / n
+  ) %>%
+  # Selecting and ordering columns
+  dplyr::select(variable, n, missing, missing_pct, unique, unique_pct, everything())
+
+# Limiting the number of digits in the table and using scientific notation
+options(digits = 2, scipen = 0)
+```
+
+```{r, include = TRUE, fig.pos="H"}
+# Display the Descriptive Summary of Numeric Variables
+numericSummary %>%  
+  kable(digits = 2, format = "latex", booktabs = TRUE, 
+        caption = "Descriptive Summary of Numeric Variables") %>%
+  kable_styling(font_size = 12,latex_options = c("H", "scale_down")) %>%
+  row_spec(0, bold = TRUE) %>% 
+  row_spec(1:nrow(numericSummary), extra_latex_after = "\\addlinespace[0.5em]")
+```
+
+```{r}
+# Function to get the mode
+getmode <- function(v) {
+  tbl <- table(v)
+  return(names(which.max(tbl)))  # 1st mode
+}
+
+# Function to get the mode frequency
+getmodeCnt <- function(v) {
+  tbl <- table(v)
+  return(max(tbl))  # 1st mode frequency
+}
+```
+
+```{r}
+# Define categorical summary function
+myCategoricalSummary <- function(x) {
+  c(
+    length(x),
+    sum(is.na(x)),
+    n_distinct(x),
+    getmode(x), getmodeCnt(x)
+  )
+}
+
+# Apply the categorical summary function to all factors in trainFactor
+factorSummary <- dfFactor %>%
+  summarise_all(myCategoricalSummary)
+
+# Add column titles to the factorSummary table
+factorSummary <- cbind(
+  stat = c("n", "missing", "unique", "mode", "mode_freq"),
+  factorSummary
+)
+
+# Reshape the data and calculate percentages for missing and unique values
+factorSummaryFinal <- factorSummary %>%
+  tidyr::pivot_longer(cols = "Date":"Tax_exempt", 
+                      names_to = "variable", values_to = "value") %>%
+  tidyr::pivot_wider(names_from = stat, values_from = value) %>%
+  dplyr::mutate(
+    missing_pct = 100 * as.numeric(missing) / as.numeric(n),  # Calculate missing percentage
+    unique_pct = 100 * as.numeric(unique) / as.numeric(n),  
+  ) %>%
+  dplyr::select(variable, n, missing, missing_pct, unique, unique_pct, everything())
+# Set display options for precision and formatting
+options(digits = 3, scipen = 99)
+```
+
+```{r ,include = TRUE, fig.pos = "H"}
+# Display the final summary table with kable
+factorSummaryFinal %>% 
+  kable(digits = 2, format = "latex", booktabs = TRUE, 
+        caption = "Descriptive Summary of Categorical Variables") %>%
+  kable_styling(font_size = 7,latex_options = c("H")) %>%
+  row_spec(0, bold = TRUE) %>%  # Make header bold
+  row_spec(1:nrow(factorSummaryFinal), extra_latex_after = "\\addlinespace[0.25em]")
+```
+
+The numeric variables in the Table 1 provide a clear understanding of transaction details, including the quantity of items sold, their prices, and the financial aspects of each sale. Notably, the Receipt_number variable highlights 76,219 entries across 37,196 unique transactions, indicating multi-line transactions within single receipts. The Quantity variable shows that most transactions involve one or two items, as reflected by a median value of 1 and a maximum of 40. This suggests that bulk purchases are uncommon, likely due to the nature of the business, which caters to individual customers or small groups. The Price variable ranges from 0 to 104.5, with most items priced under \$3.50 (Q3 = 3.5). This aligns with expectations for snow cone sales, where individual items are typically low-cost. Discounts are represented by a binary Discount variable, where the vast majority of transactions do not include discounts (mode = 0). Meanwhile, the Subtotal, Total_tax, and Final_price variables confirm that most transactions are small in scale, with medians of \$3.75, \$0.09, and \$2.20, respectively. The high variability in prices and subtotals may be influenced by factors like product size, add-ons, or customer preferences.
+
+Table 2 also provide important insights into transaction details. The Date variable captures sales across 236 unique days, with the highest number of transactions recorded on May 6, 2023 (671 sales). This could indicate a particularly busy day for the business, possibly tied to a seasonal or promotional event. The Time variable contains over 21,000 unique timestamps, with a most frequent transaction time of 2:48:12 PM, though this frequency (37 transactions) suggests that transactions are fairly evenly distributed throughout the day. The Staff variable reveals that "SnOasis Main" handles the bulk of the transactions, accounting for 38,804 sales. This indicates that this location likely serves as the primary or busiest stand in the chain. The Name variable highlights the popularity of specific products, with "Medium" being the most frequently sold product, appearing 16,391 times. This provides insights into customer preferences, which can inform inventory and promotion decisions.
+
+While this summary provides an initial understanding, visualizing the data offers deeper insights into customer behavior. To further explore patterns, we investigate sales trends across different timeframes, including by hour, weekday, and month.
+
+```{r,include = TRUE, fig.height=4}
+# First plot: Sales by Hour
+p1 <- df %>%
+  mutate(hour = factor(hour(dt), levels = c(9,10,11,12,1,2,3,4,5,6,7,8))) %>%
+  ggplot(aes(x = hour)) +
+  geom_bar() +
+  labs(title = "Sales by Hour") +
+  theme_minimal() +
+  theme(
+    text = element_text(size = 10),          # Set all text elements to size 10
+    plot.title = element_text(size = 10),   # Specific adjustment for plot title
+    axis.text = element_text(size = 10),    # Axis labels
+    axis.title = element_text(size = 10)    # Axis titles
+  )
+
+# Second plot: Sales by Weekday
+df$weekdays <- factor(weekdays(df$dt), 
+                      levels = c("Sunday", "Monday", "Tuesday", "Wednesday", 
+                                 "Thursday", "Friday", "Saturday"))
+
+p2 <- df %>%
+  ggplot(aes(x = weekdays)) +
+  geom_bar() +
+  labs(title = "Sales by Weekday") +
+  theme_minimal() +
+  theme(
+    text = element_text(size = 10),
+    plot.title = element_text(size = 10),
+    axis.text = element_text(size = 10),
+    axis.title = element_text(size = 10)
+  )
+
+# Third plot: Sales by Month
+p3 <- df %>% 
+  mutate(month = factor(month(dt, label = TRUE, abbr = TRUE),
+                        levels = month.abb)) %>%
+  ggplot(aes(x = month)) +
+  geom_bar() +
+  labs(title = "Sales by Month") +
+  theme_minimal() +
+  theme(
+    text = element_text(size = 10),
+    plot.title = element_text(size = 10),
+    axis.text = element_text(size = 10),
+    axis.title = element_text(size = 10)
+  )
+
+# Combine the three plots into one figure with a title
+grid.arrange(
+  p1, p2, p3, 
+  ncol = 1, 
+  top = textGrob(
+    "Figure 1: Summary of Sales by Hour, Weekday, and Month", 
+    gp = gpar(fontsize = 10)
+  )
+)
+```
+
+The Sales by Hour plot shows a peak in sales between 2:00 AM and 4:00 AM, indicating that most transactions occur during these early morning hours. The Sales by Weekday plot reveals consistent sales across the week, with only a slight dip on Sundays, suggesting steady demand without a strong weekday or weekend effect. The Sales by Month plot highlights higher sales from April to July, followed by a decline from August to October, hinting at seasonal trends with peak activity in spring and early summer and a slower period in late summer.
+ 
+```{r include = TRUE, fig.height=4}
+df %>%
+  filter(Name != "" & Name != "5.31") %>%  # Exclude blank and "5.31" product names
+  ggplot(aes(x = Name, y = Price..USD.)) +
+  geom_boxplot(
+    fill = "skyblue", 
+    color = "darkblue", 
+    outlier.color = "red", 
+    outlier.size = 1
+  ) +  # Set the size of the outliers (dots)
+  labs(
+    title = "Figure 2: Distribution of Sales by Product", 
+    x = "Product Name", 
+    y = "Price (USD)"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(
+      size = 10,           # Set the font size to 10
+      hjust = 0.5          # Center the title
+    ),
+    axis.text.x = element_text(angle = 90, hjust = 1)  # Rotate x-axis labels
+  )
+```
+
+This plot, showing the Distribution of Sales by Product, illustrates the variation in sales prices across different products. Most products have a narrow price range clustered near the bottom of the plot, indicating relatively low and consistent prices. However, there are a few products with a wider range and several high-price outliers (indicated by red dots) — for example, products like "Gift Card," "Large," "Kiddie," and "Skittles" have higher price variability and occasional outliers reaching above $25. This suggests that while most items are low-cost, a few products are occasionally sold at higher prices, possibly due to different sizes, premium options, or special product variations.
+```{r}
+cap_outliers <- function(x) {
+  q1 <- quantile(x, 0.25, na.rm = TRUE)
+  q3 <- quantile(x, 0.75, na.rm = TRUE)
+  iqr <- q3 - q1
+  lower_bound <- q1 - 1.5 * iqr
+  upper_bound <- q3 + 1.5 * iqr
+  x <- ifelse(x < lower_bound, lower_bound, x)
+  x <- ifelse(x > upper_bound, upper_bound, x)
+  return(x)
+}
+
+# Apply to numeric columns
+dfNumeric <- dfNumeric %>%
+  mutate(across(everything(), cap_outliers))
+```
+
+# Methodology
+
+
+## Apriori Algorithm
+
+The Apriori algorithm was applied to examine the most frequent items purchased together in the dataset. The algorithm's parameters, support and confidence, were set to 5\% and 25\%, respectively, to balance generating meaningful rules without producing an excessive number of results. These thresholds allowed for the identification of actionable associations within the data.
+
+To explore associations between purchases made at different times of the day, the analysis focused on identifying buying patterns, such as whether customers who purchase large items are likely to also buy medium items and candy. The arules package was utilized to uncover these relationships, providing insights into customer behavior. These findings offer valuable information for designing targeted promotions and bundling strategies, helping to optimize product offerings and drive sales.
+
+
+```{r}
+df <- df %>%
+  mutate(
+    # Convert weekdays to an ordered factor to maintain consistent weekday order on the x-axis
+    weekdays = factor(weekdays(dt), 
+                      levels = c("Sunday", "Monday", "Tuesday", "Wednesday", 
+                                 "Thursday", "Friday", "Saturday")),
+    month = factor(month(dt))
+  )
+dfByTrans <- df %>%
+  group_by(Receipt.number) %>%
+  summarize(names = list(unique(str_trim(Name)))) %>%
+  ungroup()
+
+```
+
+```{r, include = TRUE}
+trans <- as(dfByTrans$names, "transactions")
+
+itemFrequencyPlot(
+  trans, 
+  topN = 10,                            
+  type = "absolute",                     # Use absolute frequencies
+  main = "Figure 3: Item Frequency Plot",          # Title              
+  cex.names = 0.7,                       # Set axis text size (relative to default)
+  cex.main = 0.8 ,
+  font.main = 1 
+)
+
+```
+
+```{r}
+rules <- apriori(trans, 
+                 parameter = list(supp=0.05, conf=0.25, 
+                                  maxlen=10, 
+                                  minlen = 2,
+                                  target= "rules"))
+```
+This analysis is used to predict consumer behavior and identify opportunities for targeted promotions. The association rules generated from the Apriori algorithm reveal patterns in how customers combine items during their purchases. Analyzing these rules provides valuable insights into customer preferences and shopping habits, enabling data-driven operational decisions and more effective marketing strategies.
+
+## Linear Regression 
+
+To analyze a demand schedule based on the time of day and week, a regression model was developed to predict total sales. The model is mathematically expressed as:
+
+\[
+\text{Total Sales} = \beta_0 + \beta_1 \cdot \text{Month} + \beta_2 \cdot \text{Weekday} + \beta_3 \cdot \text{Staff} + \beta_4 \cdot \text{Hour} + \beta_5 \cdot \text{Minute} + \beta_6 \cdot (\text{Hour} \cdot \text{Minute}) + \epsilon
+\]
+
+Where:
+
+- \(\beta_0\): Intercept
+
+- \(\beta_1\): Coefficients for the **Month** variable, capturing seasonal effects.
+
+- \(\beta_2\): Coefficients for the **Weekday** variable, capturing variations across weekdays.
+
+- \(\beta_3\): Coefficients for the **Staff** variable, accounting for the effect of different locations/staff.
+
+- \(\beta_4\): Coefficients for the **Hour** variable, capturing time-based variations in sales.
+
+- \(\beta_5\): Coefficients for the **Minute** variable, representing changes within each hour.
+
+- \(\beta_6\): Coefficients for the **interaction term** (\( \text{Hour} \cdot \text{Minute} \)), capturing the combined effect of specific hours and minutes.
+
+- \(\epsilon\): Error term, accounting for unobserved variability.
+
+
+## Prediction Models 
+
+Considering the time series data, three prediction models—ARIMA, ETS, and Prophet—were introduced to forecast daily receipt counts.
+### ARIMA (AutoRegressive Integrated Moving Average)
+
+The ARIMA model is defined as:
+
+\[
+y_t = c + \phi_1 y_{t-1} + \phi_2 y_{t-2} + \dots + \phi_p y_{t-p} 
++ \theta_1 \epsilon_{t-1} + \theta_2 \epsilon_{t-2} + \dots + \theta_q \epsilon_{t-q} + \epsilon_t
+\]
+
+Where:
+
+- \(y_t\): Numbers of unique receipts at time \(t\)
+
+- \(c\): Constant
+
+- \(\phi_1, \phi_2, \dots, \phi_p\): AutoRegressive (AR) coefficients
+
+- \(\theta_1, \theta_2, \dots, \theta_q\): Moving Average (MA) coefficients
+
+- \(\epsilon_t\): White noise (random error term)
+
+- \(p\): Order of AR term
+
+- \(q\): Order of MA term
+
+- \(d\): Degree of differencing to make the series stationary
+
+### ETS (Error, Trend, Seasonality)
+
+The ETS model can be written as:
+
+\[
+y_t = \ell_{t-1} + b_{t-1} + s_{t-m} + \epsilon_t
+\]
+
+Where:
+- \(y_t\): Numbers of unique receipts at time \(t\)
+
+- \(\ell_t\): Level component
+
+- \(b_t\): Trend component
+
+- \(s_t\): Seasonal component
+
+- \(\epsilon_t\): Random error
+
+- \(m\): Seasonal period
+
+The components are updated using exponential smoothing:
+
+1. Level: \(\ell_t = \alpha (y_t - s_{t-m}) + (1 - \alpha)(\ell_{t-1} + b_{t-1})\)
+
+2. Trend: \(b_t = \beta (\ell_t - \ell_{t-1}) + (1 - \beta)b_{t-1}\)
+
+3. Seasonality: \(s_t = \gamma (y_t - \ell_t) + (1 - \gamma)s_{t-m}\)
+
+Where \(\alpha, \beta, \gamma\) are smoothing parameters.
+
+### Prophet
+
+The Prophet model decomposes the time series as:
+
+\[
+y(t) = g(t) + s(t) + h(t) + \epsilon_t
+\]
+
+Where:
+- \(y(t)\): Numbers of unique receipts at time \(t\)
+
+- \(g(t)\): Trend component (linear or logistic growth)
+
+- \(s(t)\): Seasonal component (captured using Fourier series)
+
+- \(h(t)\): Holiday effect
+
+- \(\epsilon_t\): Random error
+
+#### Trend Component
+Piecewise linear trend:
+\[
+g(t) = (k + a(t)\delta)t + b
+\]
+
+Logistic growth trend:
+\[
+g(t) = \frac{C}{1 + \exp(-k(t - t_0))}
+\]
+
+Where \(C\) is the carrying capacity, \(k\) is the growth rate, and \(t_0\) is the midpoint of the growth.
+
+#### Seasonality Component
+The seasonality is modeled as:
+\[
+s(t) = \sum_{n=1}^{N} \left[ a_n \cos\left(\frac{2\pi n t}{P}\right) + b_n \sin\left(\frac{2\pi n t}{P}\right) \right]
+\]
+
+Where \(P\) is the period of the seasonality, and \(a_n, b_n\) are Fourier coefficients.
+
+
+
+# Results
+
+```{r, include = TRUE}
+# Convert the rules to a data frame
+rules_df <- as(rules, "data.frame")
+
+# Create and style the table
+rules_df %>%
+  kbl(
+    digits = 3,  # Round numeric columns to 3 decimal places
+    caption = "Association Rules Summary"
+  ) %>%
+  kable_styling(
+    full_width = FALSE, 
+    position = "center", 
+    bootstrap_options = c("striped", "hover", "condensed")
+  ) %>%
+  row_spec(0, bold = TRUE)  # Bold the header row
+
+```
+## Association Rules Results
+
+From Table 3, we observe that items like Lime, Cream, Kiddie, Small, and Medium are interconnected, creating 11 association rules. However, these rules generally have low support, meaning that the combinations occur in a smaller percentage of transactions. Despite this, these rules still provide valuable insights into consumer behavior and preferences. For example, a rule like {Large} ⇒ {Lime}, with a confidence of 34%, suggests that customers who purchase a "Large" are relatively likely to add "Lime" to their order. This highlights an opportunity to promote "Lime" as an add-on for "Large" orders, which could drive additional revenue or encourage upsizing.
+
+Similarly, the connection between "Kiddie" and other sizes like "Medium" suggests that customers may respond well to promotions offering upgrades or discounts on additional purchases. These insights allow SnOasis to think strategically about bundling and promotions. For instance, running a limited-time offer, such as a free "Lime" with every "Large" purchase, could capitalize on the existing association between these items. Additionally, offering a second "Medium" size for the price of a "Small" could encourage customers to purchase more and potentially shift their buying preferences toward larger sizes in the long term.
+
+While the low support of these rules limits their overall impact, they still provide a basis for targeted promotions and marketing efforts. By leveraging these insights, SnOasis can experiment with data-driven strategies to influence customer behavior and maximize revenue.
+
+
+## Linear Regression Results
+```{r}
+library(dplyr)
+library(lubridate)
+
+# Group data by 15-minute intervals and summarize
+#I want to group the data by 15 minute chunks so that I can accurately predict how to allocate workers. 
+dfBy15min <-df %>%
+  group_by(group15min = cut(dt, "15 min"),Staff) %>% #Include the staff variable to analyze the impact of staff on sales ]
+  summarize(names = list(unique(str_trim(Name))),totalSales = sum(Final.price..USD.), month, weekdays)%>% #Collect unique item names sold during each interval
+  mutate(hour = factor(hour(group15min)), #Extract the hour of each 15-minute interval as a factor
+    min = minute(group15min) #Extract the minute of each 15-minute interval as a numeric value
+  )%>%
+  ungroup()
+
+#Fit a linear regression model to predict total sales
+  #summarize(totalSales = sum(Final.price..USD.)) %>%
+linear_sales_model <- lm(
+  totalSales ~ month + weekdays + Staff + hour + min + hour:min, #Use these predictors:
+  #month: Seasonal effects (e.g., higher sales in December).
+  #weekdays: Captures variations between weekdays and weekends.
+  #Staff: Helps understand if certain staff members influence sales.
+  #hour and min: Time-based features to capture daily demand fluctuations.
+  #hour:min: Interaction term to detect how specific time combinations (e.g., 10:15 AM) affect sales.
+  data = dfBy15min) #Use the grouped and aggregated dataset for modeling
+
+# Tidy the model output and add significance stars
+significant_model_table <- linear_sales_model %>%
+  tidy() %>%
+  mutate(
+    significance = case_when(
+      p.value < 0.001 ~ "***",
+      p.value < 0.01 ~ "**",
+      p.value < 0.05 ~ "*",
+      p.value < 0.1 ~ ".",
+      TRUE ~ ""
+    )
+  ) %>%
+  filter(significance != "") # Keep only rows with significance stars
+
+# Print the filtered table
+print(significant_model_table)
+```
+
+```{r, include = TRUE}
+significant_model_table %>%
+  select(term, estimate, std.error, statistic, p.value, significance) %>%
+  kbl(
+    digits = 3, 
+    format = "latex",          # LaTeX format for PDF
+    booktabs = TRUE,           # Use professional-looking table style
+    caption = "Linear Regression Results with Significance Stars"
+  ) %>%
+  kable_styling(
+    latex_options = c("hold_position", "scale_down"), # Keep the table near and scalable
+    font_size = 10                                   # Adjust font size
+  ) %>%
+  row_spec(0, bold = TRUE) %>%                       # Bold the header row
+  column_spec(1, bold = TRUE, width = "8em")         # Bold the first column for emphasis
+
+```
+
+The linear regression model provides a detailed understanding of the factors influencing sales at SnOasis. Table 4 presented includes only statistically significant results (p-values less than 0.1), ensuring the focus is on meaningful predictors. These insights reveal patterns related to time, staffing, and seasonal trends, all of which are critical for optimizing operations.
+
+The analysis of monthly effects shows that sales decline significantly in November, with a strong significance level (p = 0.001), indicating a clear seasonal drop in demand. October also shows a decrease in sales, but the effect is only marginally significant (p = 0.085). These findings highlight the seasonal nature of sales, particularly in November, and suggest the need for strategies to counteract lower demand during these months.
+
+Variations in sales across weekdays are also evident. Mondays and Tuesdays show significantly lower sales, with very strong significance levels (p < 0.001). Wednesday also experiences a smaller but still notable decline in sales (p < 0.001). On the other hand, Saturdays show a modest but meaningful increase in sales (p = 0.018), consistent with higher weekend traffic. These patterns underscore the importance of tailoring staffing levels and promotional efforts to meet day-specific demand.
+
+Hourly effects reveal substantial fluctuations in sales throughout the day. Afternoon hours, such as 2 PM and 3 PM, see significant increases in sales, both with very strong significance levels (p < 0.001). Conversely, late morning and midday hours, such as 11 AM, experience sharp declines in sales, also with very strong significance (p < 0.001). These insights are critical for optimizing staffing schedules, ensuring sufficient coverage during peak afternoon hours, and avoiding overstaffing during slower periods earlier in the day.
+
+Interaction terms between hours and minutes provide further insights into sales variations within 15-minute intervals. For example, during Hour 2, specific minutes show a small positive effect on sales (p = 0.035), while Hours 3 and 5 show slight decreases during certain intervals, with moderate significance (p = 0.026 and p = 0.041, respectively). These nuanced interactions highlight subtle time-based variations that can inform more precise adjustments in operations.
+
+
+```{r,grouping by date}
+df <- cbind(dfFactor, dfNumeric)
+
+grouped_data <- df %>%
+  group_by(Date) %>%
+  summarise(
+    unique_receipts = n_distinct(`Receipt_number`),
+    total_subtotal = sum(`Subtotal`, na.rm = TRUE)
+  )
+# Ensure the Date column is in Date format
+grouped_data <- grouped_data %>%
+  mutate(Date = as.Date(Date, format = "%m/%d/%Y"))
+
+# Sort data by date
+grouped_data <- grouped_data %>% arrange(Date)
+
+# Convert data to a time series
+ts_full <- ts(grouped_data$unique_receipts, frequency = 365, start = c(year(min(grouped_data$Date)), month(min(grouped_data$Date))))
+
+```
+
+## Prediction Results
+
+```{r,include = TRUE }
+# ARIMA Model
+model_arima <- auto.arima(ts_full)
+fitted_arima <- fitted(model_arima)
+
+# ETS Model
+model_ets <- ets(ts_full)
+fitted_ets <- fitted(model_ets)
+
+# Prophet Model
+prophet_data <- grouped_data %>% rename(ds = Date, y = unique_receipts)
+model_prophet <- prophet(prophet_data)
+forecast_prophet <- predict(model_prophet, prophet_data)
+fitted_prophet <- forecast_prophet$yhat
+
+# Create a combined data frame for plotting
+fitted_data <- data.frame(
+  Date = grouped_data$Date,
+  Actual = grouped_data$unique_receipts,
+  ARIMA = as.numeric(fitted_arima),
+  ETS = as.numeric(fitted_ets),
+  Prophet = fitted_prophet
+)
+
+# Reshape data for ggplot
+plot_data <- fitted_data %>%
+  pivot_longer(cols = c(ARIMA, ETS, Prophet), names_to = "Model", values_to = "Fitted")
+
+ggplot() +
+  # Actual values
+  geom_line(data = fitted_data, aes(x = Date, y = Actual, color = "Actual"), size = 1) +
+  
+  # Fitted values for each model
+  geom_line(data = plot_data, aes(x = Date, y = Fitted, color = Model), size = 1, linetype = "dashed") +
+  
+  # Aesthetics
+  theme_minimal() +
+  labs(
+    title = "Figure 4: Comparison of ARIMA, ETS, and Prophet Models",
+    x = "Date",
+    y = "Unique Receipts"
+  ) +
+  scale_color_manual(values = c("Actual" = "blue", "ARIMA" = "red", "ETS" = "green", "Prophet" = "purple")) +
+  theme(legend.position = "bottom",
+    plot.title = element_text(size = 10))
+
+```
+
+ To evaluate the performance of our prediction models, we used Root Mean Square Error (RMSE) as a metric to measure accuracy as follow:
+ \[
+\text{RMSE} = \sqrt{\frac{1}{n} \sum_{i=1}^{n} (y_i - \hat{y}_i)^2}
+\]
+
+
+```{r,include = TRUE }
+# Calculate RMSE for each model
+rmse_arima <- rmse(grouped_data$unique_receipts, fitted_arima)
+rmse_ets <- rmse(grouped_data$unique_receipts, fitted_ets)
+rmse_prophet <- rmse(grouped_data$unique_receipts, fitted_prophet)
+
+# Combine RMSE into a table
+rmse_comparison <- data.frame(
+  Model = c("ARIMA", "ETS", "Prophet"),
+  RMSE = c(rmse_arima, rmse_ets, rmse_prophet)
+)
+# Transpose the table
+rmse_comparison_t <- t(rmse_comparison)
+
+# Convert to a data frame and set column names
+rmse_comparison_t <- as.data.frame(rmse_comparison_t)
+colnames(rmse_comparison_t) <- rmse_comparison_t[1, ]  # Set column names to "Model" row
+rmse_comparison_t <- rmse_comparison_t[-1, ]          # Remove the "Model" row
+
+# Display the transposed RMSE table as a formatted table using kable
+kable(rmse_comparison_t, caption = "Comparison of RMSE Values for Prediction Models")
+```
+
+The results show that the Prophet model had the lowest RMSE of 50.7, followed closely by ARIMA These results indicate that Prophet performed the best overall, effectively capturing both non-linear trends and seasonality in the data. ARIMA also performed well, suggesting that short-term dependencies and trends were modeled effectively. 
+
+# Conclusion:
+
+This study aimed to identify key drivers of demand,forecast sales patterns, and provide actionable recommendations to improve staffing, promotions, and inventory management. Using association rule mining, and regression analysis, time-series forecasting models (ARIMA, ETS, and Prophet) the study uncovered critical insights into consumer behavior and sales trends.
+
+Peak sales were identified between 3–5 PM and on Saturdays, while significant declines occurred in November, reflecting the seasonal nature of demand. The Prophet model demonstrated superior performance in forecasting daily receipt counts, achieving the lowest RMSE (50.7), indicating a reliable ability to predict future sales trends. However, the analysis was constrained by the single operating season of data, limiting the ability to evaluate model performance on unseen data. Additionally, the absence of direct labor metrics required indirect inference of staffing needs, which introduces some uncertainty.
+
+Based on the findings, key recommendations include optimizing staffing schedules by increasing workforce during peak hours and weekends and reducing coverage during slower periods like November and weekdays. Seasonal promotions and marketing campaigns should be implemented to sustain sales during off-peak periods. Targeted offers leveraging product associations (e.g., bundling promotions) can boost sales during low-demand times. Dynamic pricing models and clustering analysis are suggested to enhance inventory management and adapt pricing to real-time demand fluctuations.
+
+While the models demonstrate strong predictive capabilities within the available data, future work should focus on collecting multi-year data to validate the models further and incorporate external factors such as weather and location-based influences. These strategies, if implemented, could help SnOasis streamline operations, optimize costs, and enhance profitability while adapting to dynamic market conditions.
+
+
+
+
+\newpage
+# Appendix: Data quality report
+```{r,include = TRUE}
+glimpse(dfNumeric)
+glimpse(dfFactor)
+```
+
+# Variable explanation for “SnOasis” file：
+
+
+- **Date**: The date of the transaction, formatted as MM/DD/YYYY.
+
+- **Time**: The time of the transaction, indicating when the sale was processed (e.g., 7:50:56 PM).
+
+- **Staff**: Identifier for the staff member or location (e.g., "SnOasis Main" or "SnOasis East") that processed the transaction.
+
+- **Receipt number**: Unique identifier for each transaction, acting as a receipt or transaction ID.
+
+- **Name**: Name of the item sold (e.g., "Gift card," "Candy Bar").
+
+- **Variant**: Any specific variation of the item (this field appears mostly blank).
+
+- **Unit**: Likely denotes unit type or measurement, though it's mostly empty here.
+
+- **Quantity**: The number of units sold in the transaction.
+
+- **Price (USD)**: Price per unit in USD before any discounts.
+
+- **Discount (USD)**: Discount applied to the item in USD.
+
+- **Subtotal (USD)**: Total amount before tax, accounting for any discounts.
+
+- **Tax Info Available**: Indicates if tax information is available (e.g., "Yes" or "No").
+
+- **Is Tax Exempt**: Whether the transaction is exempt from taxes (e.g., "Yes" or "No").
+
+- **Total tax collected (USD)**: Amount of tax collected in USD for the transaction.
+
+- **Final price (USD)**: Total amount paid after taxes and discounts.
+
+- **SKU**: Stock-keeping unit identifier for the item, a unique code for tracking inventory.
+
+- **Barcode**: Barcode of the item, for scanning purposes (appears mostly empty).
+
+- **Cost price**: Cost price for the item, representing the cost to the business (appears mostly zero here).
+
+- **Comment**: Field for any additional notes or comments about the transaction.
+
+```{r,include = TRUE}
+df_sale = read.csv("SnOasisSaleDates.csv")
+df_sale <- df_sale %>%
+  rename(
+    Time_of_Sale = `Time.of.Sale`,
+    Sale_Description = `Sale.Description`,
+    Location_of_Sale = `Location.of.Sale`
+  )
+glimpse(df_sale)
+```
+# Variable explanation for “SnOasisSale” file：
+
+- **Day**: The specific date of the sale event, formatted as MM/DD/YYYY.
+
+- **Sale Description**: A detailed description of the sale event, including any promotional offers or special deals (e.g., "Buy 1 get 1 free" or "Free Toppings").
+
+- **Time of Sale**: The timeframe during which the sale event is active (e.g., "11 AM - 1 PM" or "All day").
+
+- **Location of Sale**: Specifies the location of the sale event, such as "Mobile Trailer," "East," or "Main."
+
+
+# Modeling Summary
+
+ -**1. Data Preparation**:
+    Objective: Ensure the dataset is clean and well-structured to support analysis and development.
+    We removed outliers (e.g., negative prices/quantities).
+    Then we standardized variables and enriched date-time with features (e.g., hour, weekday) and grouped data into 15-minute intervals for regression analysis.
+
+ -**2. Exploratory Data Analysis**:
+    Though analysis we found peak sales between 2:00–4:00 AM, with Fridays being busiest as well as determine popular products: "Medium," "Large," and add-ons like "Lime."
+    Then explore the seasonal trends such as High sales in spring/summer, and declining late summer.
+
+ -**3. Association Rule Mining**:
+    We uncovered relationships between purcahsed items to help with selling strategies. 
+    We found that customers frequently pair sizes and add ons (e.g., "Lime" with "Medium").
+
+ -**4. Regression Modeling**:
+    We delevolped a predictive model based on time, day, and staff levels for the increase in sales. 
+    We built a linear regression using time, day, and staffing levels.
+    We found that interaction efffects revealed great predictive oportunities for predicting sales.
+
+ -**5. Insights**:
+    We found large impacts from staffing and need to focus resources on early morning peaks, especially weekends and we found that promotions can leverage popular add-ons and seasonal campaigns.
+
+ -**Future Directions*:
+    Next we want to test advanced models (e.g., time-series analysis) to enchance sales forecasts and explore clustering models for inventory management.
+
+
+
+
+
+
